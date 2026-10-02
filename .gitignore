@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Runtime data (sqlite, uploads, artifacts, demo csv)
+backend/data/
+!backend/data/.gitkeep
+
+# Env
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,44 @@
+services:
+  backend:
+    build: ./backend
+    container_name: mlution-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      MLUTION_DATA_DIR: /app/data
+    volumes:
+      - mlution-data:/app/data
+    # Resource limits: ML experiments run inside this container,
+    # so CPU/RAM/time are capped here. Each experiment additionally
+    # runs with a per-run time budget enforced by the backend.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: mlution-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mlution-data:

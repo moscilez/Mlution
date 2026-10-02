@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 9 9 11;
+  --card: 18 18 24;
+  --brand: 139 92 246;
+  --accent: 34 211 238;
+}
+
+* {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: #ffffff;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0c0c10;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 8px;
+  border: 2px solid #0c0c10;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #27272a #0c0c10;
+}
+
+/* Radial violet glow used on hero / page accents */
+.glow-violet {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    rgba(139, 92, 246, 0.18),
+    transparent 70%
+  );
+}
+
+.glow-cyan {
+  background: radial-gradient(
+    ellipse 40% 40% at 80% 20%,
+    rgba(34, 211, 238, 0.1),
+    transparent 70%
+  );
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, #a78bfa 0%, #8b5cf6 45%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Thin range slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #8b5cf6;
+  border: 2px solid #c4b5fd;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+input[type="range"]::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #8b5cf6;
+  border: 2px solid #c4b5fd;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
+  cursor: pointer;
+}
+input[type="range"]:focus-visible {
+  box-shadow: 0 0 0 2px #09090b, 0 0 0 4px #8b5cf6;
+}
