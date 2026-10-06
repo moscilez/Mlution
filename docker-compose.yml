@@ -1,44 +1,114 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mlution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlution-local-only}
+      POSTGRES_DB: ${POSTGRES_DB:-mlution}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5433}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
   backend:
     build: ./backend
-    container_name: mlution-backend
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
+      - '127.0.0.1:8000:8000'
+    environment: &backend-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mlution}:${POSTGRES_PASSWORD:-mlution-local-only}@postgres:5432/${POSTGRES_DB:-mlution}
+      REDIS_URL: redis://redis:6379/0
+      JOB_MODE: redis
       MLUTION_DATA_DIR: /app/data
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_ENABLED: ${DEMO_ENABLED:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-25}
+      MAX_ROWS: ${MAX_ROWS:-100000}
+      MAX_COLUMNS: ${MAX_COLUMNS:-200}
+      MAX_EXPERIMENTS: ${MAX_EXPERIMENTS:-6}
+      DEFAULT_TIME_BUDGET_SECONDS: ${DEFAULT_TIME_BUDGET_SECONDS:-180}
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
     volumes:
       - mlution-data:/app/data
-    # Resource limits: ML experiments run inside this container,
-    # so CPU/RAM/time are capped here. Each experiment additionally
-    # runs with a per-run time budget enforced by the backend.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  worker:
+    build: ./backend
+    command: ['python', '-m', 'app.worker']
+    environment: *backend-env
+    volumes:
+      - mlution-data:/app/data
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 45s
     deploy:
       resources:
         limits:
-          cpus: "2.0"
+          cpus: '2.0'
           memory: 4G
-        reservations:
-          memory: 512M
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
-      interval: 30s
+      test: ['CMD', 'python', '-c', "from redis import Redis;from rq import Worker;import os;assert Worker.all(connection=Redis.from_url(os.environ['REDIS_URL']))"]
+      interval: 15s
       timeout: 5s
-      retries: 5
-
+      retries: 10
+    restart: unless-stopped
   frontend:
     build:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    container_name: mlution-frontend
     ports:
-      - "3000:3000"
+      - '127.0.0.1:3000:3000'
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
-
 volumes:
+  postgres-data:
+  redis-data:
   mlution-data:

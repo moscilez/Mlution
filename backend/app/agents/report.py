@@ -12,7 +12,9 @@ def _fmt(v: Optional[float]) -> str:
 
 def generate_usage_code(project: dict, best: dict, profile: dict, task: dict) -> str:
     target = task["target_column"]
-    dropped = set(profile.get("id_columns") or []) | {c["column"] for c in (profile.get("leakage_candidates") or [])}
+    dropped = set(profile.get("id_columns") or []) | {
+        c["column"] for c in (profile.get("leakage_candidates") or [])
+    }
     example = {}
     for col in profile.get("columns") or []:
         if col["name"] == target or col["name"] in dropped:
@@ -30,13 +32,13 @@ def generate_usage_code(project: dict, best: dict, profile: dict, task: dict) ->
     is_classification = task["task_type"] != "regression"
     lines = [
         '"""',
-        f"Mlution inference script — project '{project['name']}'.",
-        f"Task: {task['task_type']}, target: '{target}', model: {best['model_type']}.",
+        "Mlution inference script. Load only the model downloaded from your own project.",
         f"Validation {best['primary_metric_name']} = {_fmt(best['primary_metric_value'])}.",
         "",
         "Usage:  pip install joblib pandas scikit-learn",
         "        python mlution_inference.py",
         '"""',
+        f"# Project: {project['name']!r}; target: {target!r}; model: {best['model_type']!r}",
         "import joblib",
         "import pandas as pd",
         "",
@@ -52,10 +54,10 @@ def generate_usage_code(project: dict, best: dict, profile: dict, task: dict) ->
         "bundle = joblib.load(ARTIFACT_PATH)",
         'pipeline, meta = bundle["pipeline"], bundle["meta"]',
         "",
-        "df = pd.DataFrame([sample])",
+        'df = pd.DataFrame([{key: sample.get(key) for key in meta["features"]}])',
         'for col in meta.get("numeric_features", []):',
         "    if col in df:",
-        '        df[col] = pd.to_numeric(df[col], errors="coerce")',
+        '        df[col] = pd.to_numeric(df[col], errors="coerce").astype(float)',
         "",
     ]
     if is_classification:
@@ -99,7 +101,10 @@ class ReportAgent:
         completed = [e for e in experiments if e["status"] == "completed"]
         if not completed:
             raise RuntimeError("No completed experiments to report on.")
-        best = max(completed, key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"])
+        best = max(
+            completed,
+            key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"],
+        )
 
         leaderboard = [
             {
@@ -116,7 +121,11 @@ class ReportAgent:
         ]
 
         others = [e for e in completed if e["id"] != best["id"]]
-        runner_up = max(others, key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"], default=None)
+        runner_up = max(
+            others,
+            key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"],
+            default=None,
+        )
         comparison = (
             f"It beats the runner-up ({runner_up['name']}, {_fmt(runner_up['primary_metric_value'])})"
             if runner_up
@@ -135,7 +144,7 @@ class ReportAgent:
         explanation = narrate(
             "Explain in 2-4 sentences why the winning model was selected, referencing only the metrics given.",
             f"Task: {task['task_type']}, primary metric: {primary}. "
-            f"Leaderboard: {[(l['model_type'], round(l['primary_metric_value'], 4)) for l in leaderboard]}. "
+            f"Leaderboard: {[(entry['model_type'], round(entry['primary_metric_value'], 4)) for entry in leaderboard]}. "
             f"Improvements: {[(i['action'], i['decision']) for i in improvements]}.",
             fallback_explanation,
         )

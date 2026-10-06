@@ -4,6 +4,7 @@ LLM is used ONLY for human-readable text (report explanation, chat replies).
 All metrics and facts come from real ML code. Without LLM_API_KEY, or on any
 error, deterministic template text is returned instead.
 """
+
 import httpx
 
 from ..config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL

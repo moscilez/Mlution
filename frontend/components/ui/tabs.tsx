@@ -22,7 +22,14 @@ interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
   onValueChange?: (value: string) => void;
 }
 
-function Tabs({ defaultValue, value, onValueChange, className, children, ...props }: TabsProps) {
+function Tabs({
+  defaultValue,
+  value,
+  onValueChange,
+  className,
+  children,
+  ...props
+}: TabsProps) {
   const [internal, setInternal] = React.useState(defaultValue);
   const current = value ?? internal;
   const setValue = React.useCallback(
@@ -30,7 +37,7 @@ function Tabs({ defaultValue, value, onValueChange, className, children, ...prop
       setInternal(v);
       onValueChange?.(v);
     },
-    [onValueChange]
+    [onValueChange],
   );
   return (
     <TabsContext.Provider value={{ value: current, setValue }}>
@@ -41,19 +48,20 @@ function Tabs({ defaultValue, value, onValueChange, className, children, ...prop
   );
 }
 
-const TabsList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      role="tablist"
-      className={cn(
-        "inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1",
-        className
-      )}
-      {...props}
-    />
-  )
-);
+const TabsList = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    role="tablist"
+    className={cn(
+      "inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1",
+      className,
+    )}
+    {...props}
+  />
+));
 TabsList.displayName = "TabsList";
 
 interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -75,13 +83,13 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
           "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50",
           active
             ? "bg-brand text-white shadow-glow"
-            : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5",
-          className
+            : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100",
+          className,
         )}
         {...props}
       />
     );
-  }
+  },
 );
 TabsTrigger.displayName = "TabsTrigger";
 
@@ -101,7 +109,7 @@ const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
         {...props}
       />
     );
-  }
+  },
 );
 TabsContent.displayName = "TabsContent";
 

@@ -16,7 +16,10 @@ class FeatureEngineeringAgent:
     def plan(self, df: pd.DataFrame, target: str, profile: dict) -> dict:
         drop_cols = set(profile.get("id_columns") or [])
         drop_cols |= {c["column"] for c in (profile.get("leakage_candidates") or [])}
+        drop_cols |= {c for c in df.columns if df[c].nunique(dropna=True) <= 1}
         features = [c for c in df.columns if c != target and c not in drop_cols]
+        if not features:
+            raise ValueError("No usable features remain after removing constants, IDs and leakage")
         numeric = [c for c in features if pd.api.types.is_numeric_dtype(df[c])]
         categorical = [c for c in features if c not in numeric]
         dropped = sorted(drop_cols & set(df.columns))
@@ -40,7 +43,11 @@ class FeatureEngineeringAgent:
         transformers = []
         if numeric:
             transformers.append(
-                ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), numeric)
+                (
+                    "num",
+                    Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]),
+                    numeric,
+                )
             )
         if categorical:
             transformers.append(
@@ -49,7 +56,14 @@ class FeatureEngineeringAgent:
                     Pipeline(
                         [
                             ("imputer", SimpleImputer(strategy="most_frequent")),
-                            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+                            (
+                                "onehot",
+                                OneHotEncoder(
+                                    handle_unknown="ignore",
+                                    sparse_output=False,
+                                    max_categories=max(2, min(50, 512 // max(1, len(categorical)))),
+                                ),
+                            ),
                         ]
                     ),
                     categorical,

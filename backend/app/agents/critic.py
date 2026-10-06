@@ -33,7 +33,10 @@ class CriticAgent:
         if not completed:
             return warnings, None
 
-        best = max(completed, key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"])
+        best = max(
+            completed,
+            key=lambda e: e["primary_metric_value"] if higher_better else -e["primary_metric_value"],
+        )
 
         train_v = _train_metric(best, primary)
         val_v = _val_metric(best, primary)
@@ -62,12 +65,18 @@ class CriticAgent:
                     "level": "critical",
                     "code": "suspicious_perfect_score",
                     "message": f"Validation {primary} is nearly perfect ({val_v:.4f}). "
-                    + (f"Leakage suspects already excluded: {', '.join(c['column'] for c in leak)}." if leak else "Double-check for data leakage."),
+                    + (
+                        f"Leakage suspects already excluded: {', '.join(c['column'] for c in leak)}."
+                        if leak
+                        else "Double-check for data leakage."
+                    ),
                 }
             )
 
         for w in warnings:
-            ctx.emit(self.name, "critique", w["message"], "warning" if w["level"] != "critical" else "error", w)
+            ctx.emit(
+                self.name, "critique", w["message"], "warning" if w["level"] != "critical" else "error", w
+            )
 
         proposal: Optional[dict[str, Any]] = None
         if ctx.experiment_slots_left() <= 0:
@@ -100,5 +109,7 @@ class CriticAgent:
             }
 
         if proposal:
-            ctx.emit(self.name, "critique", f"Improvement hypothesis: {proposal['hypothesis']}", data=proposal)
+            ctx.emit(
+                self.name, "critique", f"Improvement hypothesis: {proposal['hypothesis']}", data=proposal
+            )
         return warnings, proposal

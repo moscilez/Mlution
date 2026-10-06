@@ -1,208 +1,496 @@
+"use client";
 import Link from "next/link";
+import { useState } from "react";
 import {
   ArrowRight,
+  ArrowUpRight,
+  Check,
+  Database,
+  FileText,
   ScanSearch,
   ClipboardList,
-  Hammer,
-  Gauge,
-  MessageSquare,
+  Layers3,
+  ChartNoAxesCombined,
+  ShieldCheck,
   TrendingUp,
-  Rocket,
-  Database,
-  Boxes,
-  Trophy,
-  FileText,
-  RefreshCcw,
+  PackageCheck,
   Download,
-  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { DemoButton } from "@/components/demo-button";
+import { useI18n } from "@/lib/i18n";
 
-const stages = [
-  { name: "Analyze", icon: ScanSearch, description: "Profiles your CSV and detects the target" },
-  { name: "Plan", icon: ClipboardList, description: "Chooses task type and metrics" },
-  { name: "Baseline", icon: Hammer, description: "Trains a first safe model" },
-  { name: "Evaluate", icon: Gauge, description: "Scores it on held-out data" },
-  { name: "Critique", icon: MessageSquare, description: "Reviews errors and risks" },
-  { name: "Improve", icon: TrendingUp, description: "Iterates with tuned models" },
-  { name: "Finalize", icon: Rocket, description: "Packages model, code and report" },
-];
-
-const features = [
-  {
-    icon: Database,
-    title: "Auto data profiling",
-    description:
-      "Column types, missing values, duplicates, class balance and leakage suspects are detected before any training starts.",
+const copy = {
+  ru: {
+    nav: "Возможности",
+    process: "Как это работает",
+    projects: "Мои проекты",
+    start: "Начать проект",
+    eyebrow: "ВАШЕ ПРОСТРАНСТВО ДЛЯ МАШИННОГО ОБУЧЕНИЯ",
+    title: ["Данные.", "Модели.", "Решения."],
+    intro:
+      "От первого CSV до модели, которой вы доверяете. Mlution анализирует данные, сравнивает алгоритмы и объясняет каждый шаг.",
+    note: "Ваши данные. Понятный процесс. Измеримый результат.",
+    preview: "ЗНАКОМСТВО С ПРОЦЕССОМ",
+    previewTitle: "Сложная работа.\nПростой путь.",
+    previewIntro:
+      "Семь этапов, каждый — на виду. Выберите этап и узнайте, что происходит между загрузкой данных и готовым результатом.",
+    sample: "Пример проекта · прогноз оттока",
+    illustrative: "Иллюстрация процесса · значения для примера",
+    input: "Входные данные",
+    output: "Результат этапа",
+    progress: "Путь к модели",
+    rows: "строк",
+    columns: "столбцов",
+    stages: "7 этапов",
+    artifact: "Модель, отчёт и код",
+    private: "Доступ только владельцу",
+    upload: "Один CSV",
+    uploadCaption: "Всё начинается с ваших данных",
+    metric: "F1 на валидации",
+    featuresTitle: "Больше ясности.\nНа каждом шаге.",
+    featuresIntro:
+      "Инструменты для вдумчивой работы с данными. В одном спокойном пространстве.",
+    featureNames: [
+      "Данные под контролем.",
+      "Сравнение без догадок.",
+      "Результат, который остаётся с вами.",
+    ],
+    featureBody: [
+      "Типы столбцов, пропуски, дубликаты и баланс классов. Вы увидите качество данных до начала обучения.",
+      "Базовая модель и кандидаты оцениваются по одной метрике. История экспериментов показывает, что изменилось и почему.",
+      "Скачайте модель и Python-код. Изучите отчёт, важность признаков и проверьте предсказания на своих примерах.",
+    ],
+    ctaTitle: "Ваша следующая модель\nначинается здесь.",
+    ctaBody: "Принесите задачу и данные. Остальное пройдём вместе.",
+    footer: "От данных к решению.",
+    stageNames: [
+      "Анализ",
+      "План",
+      "Базовая модель",
+      "Оценка",
+      "Проверка",
+      "Улучшение",
+      "Результат",
+    ],
+    stageTitles: [
+      "Сначала — понять данные.",
+      "Правильная цель. Чёткий план.",
+      "Точка отсчёта для сравнения.",
+      "Качество в цифрах.",
+      "Посмотреть глубже метрики.",
+      "Менять только то, что помогает.",
+      "Готово к следующему шагу.",
+    ],
+    stageDescriptions: [
+      "Агент проверяет структуру CSV, пропуски и дубликаты. Определяет целевой столбец и возможные риски утечки.",
+      "Определяет тип задачи, выбирает метрики и способы подготовки данных под вашу цель.",
+      "Обучает простую базовую модель и несколько кандидатов, чтобы получить честную точку отсчёта.",
+      "Сравнивает метрики обучения и валидации. Показывает, как модель работает на отложенных данных.",
+      "Проверяет ошибки, дисбаланс классов и признаки переобучения. Объясняет ограничения результата.",
+      "Проверяет гипотезы, меняет параметры и сохраняет изменения, которые улучшают выбранную метрику.",
+      "Собирает лучшую модель, отчёт и код для предсказаний. Всё доступно для скачивания.",
+    ],
+    outputs: [
+      "Профиль данных и предупреждения",
+      "Тип задачи и основная метрика",
+      "Первые обученные модели",
+      "Сравнение экспериментов",
+      "Риски и ограничения",
+      "История улучшений",
+      "Модель, Python-код и отчёт",
+    ],
+    checks: [
+      "Пропуски найдены",
+      "Дубликаты проверены",
+      "Целевой столбец: churn",
+    ],
+    plan: [
+      "Бинарная классификация",
+      "Основная метрика: F1",
+      "Разделение: обучение / валидация",
+    ],
+    risk: [
+      "Баланс классов",
+      "Разрыв качества на выборках",
+      "Возможная утечка данных",
+    ],
+    improved: "Гипотеза → эксперимент → сравнение",
+    generated: "Отчёт с метриками и ограничениями",
   },
-  {
-    icon: Boxes,
-    title: "Safe model zoo",
-    description:
-      "A curated set of robust, well-understood model families — no fragile exotics, only algorithms that ship reliably.",
+  en: {
+    nav: "Features",
+    process: "How it works",
+    projects: "My projects",
+    start: "Start a project",
+    eyebrow: "YOUR SPACE FOR MACHINE LEARNING",
+    title: ["Data.", "Models.", "Decisions."],
+    intro:
+      "From your first CSV to a model you understand. Mlution explores your data, compares algorithms and explains every step.",
+    note: "Your data. A clear process. Measurable results.",
+    preview: "MEET THE PROCESS",
+    previewTitle: "Complex work.\nA clear path.",
+    previewIntro:
+      "Seven stages, all in view. Select a stage to see what happens between your dataset and your finished model.",
+    sample: "Example project · customer churn",
+    illustrative: "Process illustration · example values",
+    input: "Input dataset",
+    output: "Stage output",
+    progress: "The path to a model",
+    rows: "rows",
+    columns: "columns",
+    stages: "7 stages",
+    artifact: "Model, report and code",
+    private: "Owner-only access",
+    upload: "One CSV",
+    uploadCaption: "It all starts with your data",
+    metric: "Validation F1",
+    featuresTitle: "More clarity.\nAt every step.",
+    featuresIntro:
+      "Tools for thoughtful work with data. In one calm workspace.",
+    featureNames: [
+      "Understand your data.",
+      "Compare with confidence.",
+      "A result you can take with you.",
+    ],
+    featureBody: [
+      "Column types, missing values, duplicates and class balance. See the quality of your data before training begins.",
+      "Baselines and candidates are evaluated on the same metric. Experiment history shows what changed and why.",
+      "Download your model and Python code. Explore the report, feature importance and predictions on your own examples.",
+    ],
+    ctaTitle: "Your next model\nstarts here.",
+    ctaBody: "Bring your task and data. We’ll work through the rest together.",
+    footer: "From data to decisions.",
+    stageNames: [
+      "Analyze",
+      "Plan",
+      "Baseline",
+      "Evaluate",
+      "Critique",
+      "Improve",
+      "Finalize",
+    ],
+    stageTitles: [
+      "First, understand the data.",
+      "The right goal. A clear plan.",
+      "A starting point to compare.",
+      "Quality, measured.",
+      "Look beyond the score.",
+      "Keep changes that help.",
+      "Ready for your next step.",
+    ],
+    stageDescriptions: [
+      "The agent checks your CSV structure, missing values and duplicates. It identifies the target and potential leakage.",
+      "Identifies the task type, chooses metrics and plans data preparation around your objective.",
+      "Trains a simple baseline and candidates to establish a reliable reference point.",
+      "Compares training and validation metrics. See how the model performs on held-out data.",
+      "Reviews errors, class imbalance and signs of overfitting. Explains the limitations of the result.",
+      "Tests hypotheses, adjusts parameters and retains improvements to your chosen metric.",
+      "Packages the best model, report and prediction code. Everything is ready to download.",
+    ],
+    outputs: [
+      "Data profile and warnings",
+      "Task type and primary metric",
+      "First trained models",
+      "Experiment comparison",
+      "Risks and limitations",
+      "Improvement history",
+      "Model, Python code and report",
+    ],
+    checks: [
+      "Missing values identified",
+      "Duplicates checked",
+      "Target column: churn",
+    ],
+    plan: [
+      "Binary classification",
+      "Primary metric: F1",
+      "Split: training / validation",
+    ],
+    risk: ["Class balance", "Train / validation gap", "Potential data leakage"],
+    improved: "Hypothesis → experiment → comparison",
+    generated: "Report with metrics and limitations",
   },
-  {
-    icon: Trophy,
-    title: "Experiment leaderboard",
-    description:
-      "Every run is tracked with hyperparameters, train and validation metrics, ranked best-first for full transparency.",
-  },
-  {
-    icon: FileText,
-    title: "Explainable reports",
-    description:
-      "Feature importances, confusion matrices and plain-language reasoning behind every modeling decision.",
-  },
-  {
-    icon: RefreshCcw,
-    title: "Improvement loop",
-    description:
-      "The agent critiques its own baseline, forms hypotheses and keeps the changes that measurably help.",
-  },
-  {
-    icon: Download,
-    title: "One-click export",
-    description:
-      "Download the trained model and ready-to-run Python inference code the moment the run finalizes.",
-  },
+};
+const icons = [
+  ScanSearch,
+  ClipboardList,
+  Layers3,
+  ChartNoAxesCombined,
+  ShieldCheck,
+  TrendingUp,
+  PackageCheck,
 ];
 
 export default function LandingPage() {
+  const { locale } = useI18n();
+  const c = copy[locale];
+  const [stage, setStage] = useState(0);
+  const StageIcon = icons[stage];
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden">
-      <div className="glow-violet pointer-events-none absolute inset-x-0 top-0 h-[560px]" />
-      <div className="glow-cyan pointer-events-none absolute inset-x-0 top-[480px] h-[420px]" />
-
-      {/* Nav */}
-      <header className="relative z-10 mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Logo />
-        <nav className="flex items-center gap-2">
-          <Link href="/dashboard" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            Dashboard
-          </Link>
-          <Link href="/projects/new" className={buttonVariants({ size: "sm" })}>
-            Create project
-          </Link>
-        </nav>
+    <div className="landing">
+      <header className="landing-header">
+        <div className="landing-nav">
+          <Logo />
+          <nav
+            aria-label={locale === "ru" ? "Главное меню" : "Main navigation"}
+          >
+            <a href="#process" className="nav-secondary">
+              {c.process}
+            </a>
+            <a href="#features" className="nav-secondary">
+              {c.nav}
+            </a>
+            <LanguageSwitcher />
+            <Link href="/dashboard" className="nav-projects">
+              {c.projects}
+              <ArrowUpRight size={13} />
+            </Link>
+          </nav>
+        </div>
       </header>
-
-      <main className="relative z-10 flex-1">
-        {/* Hero */}
-        <section className="mx-auto flex max-w-4xl flex-col items-center px-4 pb-20 pt-16 text-center sm:pt-24">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-1.5 text-xs font-medium text-violet-300">
-            <Sparkles className="h-3.5 w-3.5" />
-            Autonomous ML agent
-          </div>
-          <h1 className="text-balance text-4xl font-extrabold tracking-tight sm:text-6xl">
-            From idea to <span className="text-gradient">ML solution</span>
+      <main>
+        <section className="landing-hero">
+          <p className="eyebrow">{c.eyebrow}</p>
+          <h1>
+            {c.title[0]}
+            <br />
+            {c.title[1]} <span>{c.title[2]}</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-pretty text-base text-zinc-400 sm:text-lg">
-            Describe your task, drop in a CSV, and let the Mlution agent profile your data,
-            train and critique models, and hand you back a ranked leaderboard, an explainable
-            report and exportable artifacts — no notebooks required.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/projects/new" className={cn(buttonVariants({ size: "lg" }), "group")}>
-              Create project
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          <p className="hero-intro">{c.intro}</p>
+          <div className="hero-actions">
+            <Link href="/projects/new" className="primary-pill">
+              {c.start}
+              <ArrowRight size={17} />
             </Link>
-            <Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "lg" })}>
-              View dashboard
-            </Link>
+            <DemoButton />
           </div>
-        </section>
-
-        {/* Workflow strip */}
-        <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
-          <h2 className="mb-10 text-center text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">
-            One agent, seven deliberate stages
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-            {stages.map((stage, index) => (
-              <div key={stage.name} className="group relative">
-                {index < stages.length - 1 ? (
-                  <div className="absolute left-full top-1/2 hidden h-px w-3 -translate-y-1/2 bg-gradient-to-r from-brand/50 to-transparent lg:block" />
-                ) : null}
-                <Card className="h-full transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-glow">
-                  <CardContent className="flex h-full flex-col items-start gap-2 p-4">
-                    <div className="flex w-full items-center justify-between">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand/25 bg-brand/10 text-violet-300 transition-colors group-hover:border-brand/50 group-hover:text-violet-200">
-                        <stage.icon className="h-[18px] w-[18px]" />
-                      </div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-100">{stage.name}</p>
-                    <p className="text-xs leading-relaxed text-zinc-500">{stage.description}</p>
-                  </CardContent>
-                </Card>
+          <p className="hero-note">{c.note}</p>
+          <div className="hero-summary">
+            {[
+              { icon: Database, name: c.upload, body: c.uploadCaption },
+              { icon: Layers3, name: c.stages, body: c.progress },
+              { icon: PackageCheck, name: c.artifact, body: c.private },
+            ].map((item) => (
+              <div key={item.name}>
+                <item.icon size={20} strokeWidth={1.5} />
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.body}</span>
+                </div>
               </div>
             ))}
           </div>
         </section>
-
-        {/* Features */}
-        <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
-          <div className="mb-12 text-center">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Everything a data scientist would check, automated
-            </h2>
-            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400">
-              Mlution is opinionated about rigor: it validates data, guards against leakage,
-              compares candidates fairly and explains itself at every step.
-            </p>
+        <section id="process" className="process-section">
+          <div className="section-heading">
+            <p className="eyebrow">{c.preview}</p>
+            <h2>{c.previewTitle}</h2>
+            <p>{c.previewIntro}</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card
-                key={feature.title}
-                className="group transition-all duration-300 hover:-translate-y-1 hover:border-brand/40"
-              >
-                <CardContent className="flex flex-col gap-3 p-6">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-accent transition-colors group-hover:border-accent/40">
-                    <feature.icon className="h-5 w-5" />
+          <div
+            className="process-stages"
+            role="tablist"
+            aria-label={c.progress}
+          >
+            {c.stageNames.map((name, index) => {
+              const Icon = icons[index];
+              return (
+                <button
+                  key={index}
+                  id={`stage-${index}`}
+                  role="tab"
+                  aria-selected={stage === index}
+                  aria-controls="stage-panel"
+                  tabIndex={stage === index ? 0 : -1}
+                  onClick={() => setStage(index)}
+                  onKeyDown={(event) => {
+                    if (
+                      ["ArrowRight", "ArrowLeft", "Home", "End"].includes(
+                        event.key,
+                      )
+                    ) {
+                      event.preventDefault();
+                      const next =
+                        event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? 6
+                            : (index + (event.key === "ArrowRight" ? 1 : 6)) %
+                              7;
+                      setStage(next);
+                      document.getElementById(`stage-${next}`)?.focus();
+                    }
+                  }}
+                >
+                  <span className="stage-number">0{index + 1}</span>
+                  <Icon size={21} strokeWidth={1.5} />
+                  <span>{name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            className="process-preview"
+            role="tabpanel"
+            id="stage-panel"
+            aria-labelledby={`stage-${stage}`}
+          >
+            <aside className="preview-aside">
+              <div className="preview-project">
+                <span className="project-dot" />
+                <span>{c.sample}</span>
+              </div>
+              <div className="dataset-preview">
+                <Database size={24} strokeWidth={1.5} />
+                <span>{c.input}</span>
+                <strong>customers.csv</strong>
+                <div>
+                  <span>2 000 {c.rows}</span>
+                  <span>10 {c.columns}</span>
+                </div>
+              </div>
+              <div className="preview-route">
+                {c.stageNames.map((name, index) => (
+                  <div
+                    key={name}
+                    className={index === stage ? "is-current" : ""}
+                  >
+                    <span>
+                      {index < stage ? <Check size={12} /> : `0${index + 1}`}
+                    </span>
+                    {name}
+                    {index === stage && <ChevronRight size={14} />}
                   </div>
-                  <p className="font-semibold text-zinc-100">{feature.title}</p>
-                  <p className="text-sm leading-relaxed text-zinc-400">{feature.description}</p>
-                </CardContent>
-              </Card>
+                ))}
+              </div>
+              <p className="preview-disclaimer">{c.illustrative}</p>
+            </aside>
+            <div className="preview-content" key={stage}>
+              <div className="preview-stage-icon">
+                <StageIcon size={26} strokeWidth={1.5} />
+              </div>
+              <p className="eyebrow">0{stage + 1} / 07</p>
+              <h3>{c.stageTitles[stage]}</h3>
+              <p className="stage-description">{c.stageDescriptions[stage]}</p>
+              <div className="stage-visual">
+                {stage === 0 && (
+                  <div className="analysis-checks">
+                    {c.checks.map((text) => (
+                      <div key={text}>
+                        <Check size={16} />
+                        <span>{text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {stage === 1 && (
+                  <div className="analysis-checks">
+                    {c.plan.map((text, i) => (
+                      <div key={text}>
+                        <span className="plan-index">0{i + 1}</span>
+                        <span>{text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(stage === 2 || stage === 3 || stage === 5) && (
+                  <>
+                    <div className="comparison-header">
+                      <span>{stage === 5 ? c.improved : c.metric}</span>
+                      <span>F1</span>
+                    </div>
+                    {[
+                      { name: "Dummy", value: 0.34 },
+                      { name: "Logistic Regression", value: 0.56 },
+                      {
+                        name: "Random Forest",
+                        value: stage === 5 ? 0.62 : 0.59,
+                      },
+                    ].map((item, i) => (
+                      <div className="model-comparison" key={item.name}>
+                        <div>
+                          <span>{item.name}</span>
+                          <strong>{item.value.toFixed(2)}</strong>
+                        </div>
+                        <div className="model-bar">
+                          <span
+                            style={{
+                              width: `${item.value * 100}%`,
+                              background: i === 2 ? "#0071e3" : "#c7c7cc",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {stage === 4 && (
+                  <div className="analysis-checks">
+                    {c.risk.map((text) => (
+                      <div key={text}>
+                        <ShieldCheck size={16} />
+                        <span>{text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {stage === 6 && (
+                  <div className="artifact-list">
+                    {[
+                      { name: "model.joblib", icon: PackageCheck },
+                      { name: "inference.py", icon: FileText },
+                      { name: c.generated, icon: FileText },
+                    ].map((item) => (
+                      <div key={item.name}>
+                        <item.icon size={18} />
+                        <span>{item.name}</span>
+                        <Download size={15} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="stage-output">
+                <span>{c.output}</span>
+                <strong>{c.outputs[stage]}</strong>
+                <ArrowRight size={18} />
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="features" className="features-section">
+          <div className="section-heading">
+            <h2>{c.featuresTitle}</h2>
+            <p>{c.featuresIntro}</p>
+          </div>
+          <div className="feature-grid">
+            {[Database, ChartNoAxesCombined, PackageCheck].map((Icon, i) => (
+              <article key={i}>
+                <span className="feature-index">0{i + 1}</span>
+                <Icon size={32} strokeWidth={1.3} />
+                <h3>{c.featureNames[i]}</h3>
+                <p>{c.featureBody[i]}</p>
+              </article>
             ))}
           </div>
         </section>
-
-        {/* Bottom CTA */}
-        <section className="mx-auto max-w-4xl px-4 pb-24 text-center sm:px-6">
-          <Card className="relative overflow-hidden">
-            <div className="glow-violet absolute inset-0" />
-            <CardContent className="relative flex flex-col items-center gap-5 px-6 py-14">
-              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                Your next model is one CSV away
-              </h2>
-              <p className="max-w-xl text-sm text-zinc-400">
-                Spin up a project, point the agent at your dataset and watch the pipeline
-                reason its way to a production-ready baseline.
-              </p>
-              <Link href="/projects/new" className={cn(buttonVariants({ size: "lg" }), "group")}>
-                Create project
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </CardContent>
-          </Card>
+        <section className="landing-cta">
+          <p className="eyebrow">MLUTION</p>
+          <h2>{c.ctaTitle}</h2>
+          <p>{c.ctaBody}</p>
+          <Link href="/projects/new" className="primary-pill">
+            {c.start}
+            <ArrowRight size={17} />
+          </Link>
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10">
-        <div className="mx-auto flex h-16 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-zinc-500 sm:px-6">
-          <div className="flex items-center gap-2">
-            <Logo />
-          </div>
-          <p>From idea to ML solution — autonomous, explainable, exportable.</p>
-        </div>
+      <footer className="landing-footer">
+        <Logo />
+        <p>{c.footer}</p>
+        <LanguageSwitcher />
       </footer>
     </div>
   );

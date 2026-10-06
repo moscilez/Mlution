@@ -1,5 +1,7 @@
 import time
-from typing import Any, Optional
+import hashlib
+import logging
+from typing import Optional
 
 import joblib
 import numpy as np
@@ -11,6 +13,7 @@ from sklearn.metrics import (
     confusion_matrix as sk_confusion_matrix,
     f1_score,
     mean_absolute_error,
+    median_absolute_error,
     precision_score,
     r2_score,
     recall_score,
@@ -22,6 +25,7 @@ from sklearn.pipeline import Pipeline
 from .. import db
 from ..services.storage import experiment_artifact_path
 from .base import AgentContext
+from .base import RunCancelled
 
 try:
     from sklearn.metrics import root_mean_squared_error
@@ -41,6 +45,10 @@ def compute_metrics(task_type: str, y_true, y_pred, y_proba_pos=None) -> list[di
         out.append({"name": "rmse", "value": float(root_mean_squared_error(y_true, y_pred))})
         out.append({"name": "mae", "value": float(mean_absolute_error(y_true, y_pred))})
         out.append({"name": "r2", "value": float(r2_score(y_true, y_pred))})
+        out.append({"name": "median_absolute_error", "value": float(median_absolute_error(y_true, y_pred))})
+        residuals = np.asarray(y_true) - np.asarray(y_pred)
+        out.append({"name": "residual_mean", "value": float(np.mean(residuals))})
+        out.append({"name": "residual_std", "value": float(np.std(residuals))})
         return out
     if task_type == "binary_classification":
         out.append({"name": "accuracy", "value": float(accuracy_score(y_true, y_pred))})
@@ -51,8 +59,24 @@ def compute_metrics(task_type: str, y_true, y_pred, y_proba_pos=None) -> list[di
             out.append({"name": "roc_auc", "value": float(roc_auc_score(y_true, y_proba_pos))})
         return out
     out.append({"name": "accuracy", "value": float(accuracy_score(y_true, y_pred))})
-    out.append({"name": "f1_macro", "value": float(f1_score(y_true, y_pred, average="macro", zero_division=0))})
-    out.append({"name": "f1_weighted", "value": float(f1_score(y_true, y_pred, average="weighted", zero_division=0))})
+    out.append(
+        {
+            "name": "precision_macro",
+            "value": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
+        }
+    )
+    out.append(
+        {
+            "name": "recall_macro",
+            "value": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
+        }
+    )
+    out.append(
+        {"name": "f1_macro", "value": float(f1_score(y_true, y_pred, average="macro", zero_division=0))}
+    )
+    out.append(
+        {"name": "f1_weighted", "value": float(f1_score(y_true, y_pred, average="weighted", zero_division=0))}
+    )
     return out
 
 
@@ -144,6 +168,7 @@ class ExperimentAgent:
         balance: bool = False,
     ) -> dict:
         ctx = self.ctx
+        ctx.check_cancelled()
         eid = db.create_experiment(ctx.project_id, name, model_type, stage, hyperparameters or {})
         db.update_experiment(eid, status="running")
         ctx.emit(self.name, "build_baseline" if stage == "baseline" else "improve", f"Training {name}…")
@@ -160,6 +185,7 @@ class ExperimentAgent:
 
                 fit_kwargs["model__sample_weight"] = compute_sample_weight("balanced", y_train)
             pipe.fit(X_train, y_train, **fit_kwargs)
+            ctx.check_cancelled()
             train_seconds = round(time.time() - t0, 2)
 
             threshold = 0.5
@@ -179,25 +205,40 @@ class ExperimentAgent:
 
             metrics = [
                 {**m, "split": "validation"} for m in compute_metrics(task_type, y_val, y_pred_val, proba_val)
-            ] + [{**m, "split": "train"} for m in compute_metrics(task_type, y_train, y_pred_train, proba_train)]
+            ] + [
+                {**m, "split": "train"}
+                for m in compute_metrics(task_type, y_train, y_pred_train, proba_train)
+            ]
 
             primary_value = next(
-                (m["value"] for m in metrics if m["name"] == primary_metric and m["split"] == "validation"), None
+                (m["value"] for m in metrics if m["name"] == primary_metric and m["split"] == "validation"),
+                None,
             )
 
             importance = feature_importance(pipe, X_val, y_val, list(X.columns))
             cm = None
             if task_type in CLASSIFICATION:
-                labels = [str(c) for c in pipe.classes_]
-                cm = {"labels": labels, "matrix": sk_confusion_matrix(y_val, y_pred_val).astype(int).tolist()}
+                labels = getattr(ctx, "class_labels", [str(c) for c in pipe.classes_])
+                cm = {
+                    "labels": labels,
+                    "support": [int((y_val == label).sum()) for label in pipe.classes_],
+                    "matrix": sk_confusion_matrix(y_val, y_pred_val, labels=pipe.classes_)
+                    .astype(int)
+                    .tolist(),
+                }
 
             artifact = experiment_artifact_path(ctx.project_id, eid)
-            classes = [str(c) for c in pipe.classes_] if hasattr(pipe, "classes_") else None
+            classes = getattr(
+                ctx, "class_labels", [str(c) for c in pipe.classes_] if hasattr(pipe, "classes_") else None
+            )
             joblib.dump(
                 {
                     "pipeline": pipe,
                     "meta": {
                         "experiment_id": eid,
+                        "run_id": ctx.run_id,
+                        "origin": "mlution-worker",
+                        "model_version": eid,
                         "project_id": ctx.project_id,
                         "model_type": model_type,
                         "model_name": name,
@@ -223,6 +264,7 @@ class ExperimentAgent:
                 feature_importance=importance,
                 confusion_matrix=cm,
                 artifact_path=str(artifact),
+                artifact_sha256=hashlib.sha256(artifact.read_bytes()).hexdigest(),
                 threshold=threshold if is_binary else None,
             )
             ctx.emit(
@@ -233,9 +275,19 @@ class ExperimentAgent:
                 "success",
                 {"experiment_id": eid, "metrics": metrics},
             )
-        except Exception as exc:  # keep the pipeline alive if one model fails
-            db.update_experiment(eid, status="failed", error=str(exc)[:500])
-            ctx.emit(self.name, "build_baseline" if stage == "baseline" else "improve",
-                     f"{name} failed: {exc}", "error")
+        except RunCancelled:
+            db.update_experiment(eid, status="failed", error="Run cancelled")
+            raise
+        except Exception:  # keep the pipeline alive if one model fails
+            logging.exception("Experiment failed: %s", eid)
+            db.update_experiment(
+                eid, status="failed", error="Model training failed; try another model or review dataset"
+            )
+            ctx.emit(
+                self.name,
+                "build_baseline" if stage == "baseline" else "improve",
+                f"{name} training failed.",
+                "error",
+            )
         row = next(e for e in db.list_experiments(ctx.project_id) if e["id"] == eid)
         return row

@@ -1,144 +1,122 @@
 # Mlution
 
-**From idea to ML solution.**
+**From idea to ML solution.** Describe your problem. Upload your data. Let Mlution build, test and improve the solution.
 
-Mlution — AI-агент, который самостоятельно создаёт и улучшает ML-решения на основе описания задачи на естественном языке и загруженного CSV-файла. Вы описываете задачу — агент анализирует данные, планирует эксперимент, обучает несколько моделей, сравнивает метрики, критикует результат, улучшает решение и выдаёт отчёт, обученную модель и готовый Python-код для инференса.
+Mlution is a local-first workspace for binary/multiclass classification and regression on tabular CSV data. Eight cooperating agents profile data, plan a task, train a baseline, measure results, critique and improve a model, then produce a leaderboard, report, downloadable preprocessing/model bundle and inference code. An LLM is optional; all metrics and training run in trusted Python.
 
-MVP поддерживает табличные CSV-данные и три типа задач: **binary classification**, **multiclass classification**, **regression**.
+## Quick start
 
-## Возможности
-
-- Автоматический Data Profile: строки/колонки, типы признаков, пропуски, дубликаты, числовые и категориальные колонки, дисбаланс классов.
-- Детекция потенциальной target-колонки, ID-колонок и data leakage.
-- Безопасный ограниченный набор моделей: Logistic/Linear Regression, Random Forest, HistGradientBoosting (+ CatBoost и Optuna как опциональные зависимости).
-- Цикл улучшения `ANALYZE → PLAN → BUILD BASELINE → EVALUATE → CRITIQUE → IMPROVE → FINALIZE` с сохранением гипотез, действий и метрик «до/после».
-- Live-статус работы агентов через SSE, чат с агентом, leaderboard экспериментов, confusion matrix, feature importance.
-- Скачивание модели (`.joblib`) и сгенерированного Python-кода инференса; Prediction Playground с динамической формой признаков.
-- Встроенный демо-датасет churn prediction — приложение работает без ручной загрузки файла.
-
-## Архитектура
-
-```
-┌──────────────┐   HTTP/JSON + SSE   ┌───────────────────────────────────────┐
-│   Frontend   │ ◄─────────────────► │                Backend                │
-│ Next.js 14   │                     │  FastAPI + pandas + scikit-learn      │
-│ TS/Tailwind  │                     │                                       │
-└──────────────┘                     │  SupervisorAgent ──► DataAnalyst      │
-                                     │        │             TaskPlanner      │
-                                     │        │             FeatureEngineering
-                                     │        │             ModelBuilder     │
-                                     │        │             Experiment       │
-                                     │        │             Critic           │
-                                     │        └────────────► Report          │
-                                     │  SQLite (данные) · joblib (артефакты) │
-                                     └───────────────────────────────────────┘
-```
-
-Принцип разделения ответственности: **все числа и метрики производит только Python-код** (sklearn). LLM (опционально, через `LLM_API_KEY`) используется исключительно для нарративных объяснений и ответов в чате; без ключа работают детерминированные шаблоны — продукт полностью функционален и без LLM.
-
-## Быстрый старт (Docker)
-
-```bash
-cp .env.example .env
+```sh
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3000
-- Backend API + Swagger: http://localhost:8000/docs
+Open http://localhost:3000 and click **Попробовать демо / Try demo**, then **Запустить пайплайн / Run pipeline**. Russian is the default interface language; RU / EN in the header saves your preference. Five services start: frontend, FastAPI backend, PostgreSQL, Redis and RQ worker. Migrations apply before API startup. No cloud account or LLM key is required. PostgreSQL is exposed on localhost:5433 to avoid a native PostgreSQL on 5432; browser/API ports are 3000/8000.
 
-## Быстрый старт (локально, без Docker)
+Configuration is optional for local demo. Copy `.env.example` to `.env` when customizing settings; do not overwrite an existing secret file. Development database defaults are strictly local. Production validates JWT_SECRET, secure cookies, disabled demo and Redis jobs.
 
-Требования: Python 3.10+, Node.js 18.17+.
+## Features and architecture
 
-```bash
-# Backend
-cd backend
-python -m venv .venv
-source .venv/Scripts/activate        # Windows Git Bash
-# . .venv/bin/activate               # Linux/macOS
-pip install -r requirements.txt
-python -m app.seed                   # демо-датасет + демо-проект
-uvicorn app.main:app --port 8000
+- PostgreSQL + SQLAlchemy 2.x + Alembic, UUID public IDs, timezone timestamps, indexed ownership/run relations.
+- Argon2id passwords, login/register/logout, rotating HttpOnly sessions, refresh, CSRF, account/password settings and local password reset.
+- Private projects: every dataset, event stream, experiment, report, model, prediction and chat is checked against the project owner.
+- Durable RQ runs with history, cancellation, full retry, safe final report retry and persisted SSE cursors. Polling covers outages.
+- Safe CSV upload, deterministic splits, missing/category preprocessing, dummy baseline, real metrics, improvement history and model integrity hashes.
+- Light white/graphite/blue design with an original Mlution mark, default Russian and persistent English preference, interactive seven-stage explorer, live timeline above the chat, charts, command palette (Ctrl/Cmd+K), skeleton/error/empty states and prediction playground.
 
-# Frontend (в другом терминале)
-cd frontend
-npm install
-npm run dev                          # http://localhost:3000
+Frontend: Next.js 15.5.24, TypeScript strict mode, React Query, Tailwind, Recharts. Backend: Python 3.12, FastAPI/Pydantic Settings, pandas, scikit-learn, SQLAlchemy/psycopg, Alembic, Redis/RQ, joblib and optional narrative LLM.
+
+Request path: browser → FastAPI (session/CSRF/owner validation) → PostgreSQL. ML path: FastAPI → Redis → Linux worker → trusted agents → PostgreSQL/events + private artifact volume. Existing SQLite files are preserved, but the application uses PostgreSQL; no automatic ownerless-data import occurs.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Local development, Windows/Linux/macOS, troubleshooting](docs/local-development.md)
+- [API routes and authentication](docs/api.md)
+- [Security and production configuration](docs/security.md)
+- [Agent pipeline and cancellation semantics](docs/agent-pipeline.md)
+- [Design, branding, localization and browser verification](docs/design-update.md)
+
+Interactive API: http://localhost:8000/docs. Readiness: http://localhost:8000/api/health.
+
+## Migrations and seed
+
+```sh
+docker compose exec backend python -m alembic upgrade head
+docker compose exec backend python -m app.seed
 ```
 
-Опциональные зависимости (CatBoost, Optuna) — `pip install -r requirements-optional.txt`. Без них backend автоматически использует sklearn-эквиваленты.
+Seed is idempotent and creates a development demo user, churn dataset, cached profile and project. A random development-only password is printed only at initial creation. The Try demo flow creates a separate account per visitor and does not require a shared password.
 
-## Демо-сценарий
+For local backend development, from `backend` create/activate a Python virtualenv, install `requirements-dev.txt`, apply `python -m alembic upgrade head`, then run `python -m uvicorn app.main:app --reload`. Use JOB_MODE=inline for a Windows-native fallback without Redis. Run `python -m app.worker` on Linux/WSL for Redis mode. In frontend use `npm ci` and `npm run dev`; set NEXT_PUBLIC_API_URL via `.env.local`. Full database setup commands are in local-development.md.
 
-1. Откройте http://localhost:3000 → **Create project**.
-2. Включите **Use built-in churn demo dataset** (telecom churn, 1500 строк, целевая колонка `churn`).
-3. Нажмите **Run agent** — на странице workspace в реальном времени видны стадии пайплайна, события агентов и логи.
-4. Через ~1–2 минуты: leaderboard из 3–4 экспериментов, лучшая модель, шаг улучшения (class weights + порог решения), отчёт.
-5. Откройте **Results** (сравнение моделей, confusion matrix, feature importance, история улучшений) и **Playground** (тестовое предсказание).
-6. Скачайте модель и Python-код кнопками **Download Model** / **Download Code**.
+## Environment variables
 
-## End-to-end проверка
+| Variable | Purpose / local default |
+| --- | --- |
+| DATABASE_URL | Native PostgreSQL SQLAlchemy URL; Compose uses postgres service |
+| POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB | Local Compose database identity |
+| POSTGRES_PORT | Host database port, 5433 |
+| JWT_SECRET | 32+ random characters in production; generated private local key when empty |
+| JWT_ALGORITHM | HS256 only |
+| ACCESS_TOKEN_EXPIRE_MINUTES / REFRESH_TOKEN_EXPIRE_DAYS | 15 / 7 |
+| CORS_ORIGINS / FRONTEND_URL | http://localhost:3000 |
+| NEXT_PUBLIC_API_URL | Browser API base URL; build-time for Docker |
+| LLM_API_KEY / LLM_BASE_URL / LLM_MODEL | Optional narrative provider; empty key keeps ML working |
+| MAX_UPLOAD_SIZE_MB | 25 |
+| MAX_EXPERIMENTS | 6 maximum; run UI defaults to 4 |
+| DEFAULT_TIME_BUDGET_SECONDS | 180 |
+| MAX_ROWS / MAX_COLUMNS | 100000 / 200 (native configuration) |
+| ENVIRONMENT / COOKIE_SECURE | development / false locally |
+| DEMO_ENABLED / SEED_DEMO | true / false |
+| REDIS_URL / JOB_MODE | Redis queue URL / redis; inline is development only |
+| MLUTION_DATA_DIR | Private datasets/artifacts/runtime key directory |
+| DEMO_PASSWORD | Optional development-only seed password; otherwise random |
 
-```bash
-cd backend
-.venv/Scripts/python scripts/e2e_demo.py   # требует запущенный сервер на :8000
+Do not put real keys or credentials in source control. Root `.env` and runtime data are ignored.
+
+## Tests and formatting
+
+From backend:
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m ruff check app tests migrations
+python -m ruff format --check app tests migrations
+python -m pytest -q
+python scripts/e2e_demo.py
 ```
 
-Скрипт проходит весь путь: создание проекта → профиль данных → обучение → отчёт → предсказание → скачивание артефактов, с проверками на каждом шаге.
+Default unit tests use disposable SQLite only under ENVIRONMENT=test. Set TEST_DATABASE_URL to an isolated PostgreSQL database ending in `_test` for the same suite against PostgreSQL. Tests clear that database's tables.
 
-## API
+From frontend:
 
-| Method | Endpoint | Назначение |
-|---|---|---|
-| POST | `/api/projects` | Создать проект |
-| POST | `/api/projects/{id}/dataset` | Загрузить CSV (или `demo=true`) |
-| POST | `/api/projects/{id}/run` | Запустить пайплайн агента |
-| GET | `/api/projects/{id}/status` | Статус и стадии пайплайна |
-| GET | `/api/projects/{id}/events` `/events/stream` | События агентов (JSON / SSE) |
-| GET | `/api/projects/{id}/profile` | Data Profile |
-| GET | `/api/projects/{id}/experiments` | Leaderboard экспериментов |
-| GET | `/api/projects/{id}/report` | Итоговый отчёт |
-| GET | `/api/projects/{id}/model` | Скачать модель (.joblib) |
-| GET | `/api/projects/{id}/code` | Скачать Python-код инференса |
-| POST | `/api/projects/{id}/predict` | Предсказание по признакам |
-| POST | `/api/projects/{id}/chat` | Чат с агентом |
-
-Интерактивная документация: http://localhost:8000/docs (Swagger UI).
-
-## Безопасность выполнения
-
-- Обучение моделей выполняется только доверенным кодом backend'а; сгенерированный Python-код инференса предназначен для скачивания и **никогда не исполняется сервером**.
-- В Docker ML-нагрузка изолирована контейнером backend'а: лимиты CPU (`2.0`) и RAM (`4G`) заданы в `docker-compose.yml`, рабочая директория — отдельный volume, сетевой доступ контейнеру не нужен для обучения.
-- Каждый запуск ограничен временным бюджетом (`time_budget_seconds`) и лимитом экспериментов (`max_experiments`).
-- Дополнительное укрепление для продакшена: вынос экспериментов в отдельный контейнер-воркер без сети, seccomp/AppArmor-профили, read-only root FS.
-
-## Структура репозитория
-
-```
-Mlution/
-├── docker-compose.yml
-├── .env.example
-├── backend/
-│   ├── app/
-│   │   ├── main.py            # FastAPI app, CORS, startup
-│   │   ├── schemas.py         # Pydantic-схемы (Project, DatasetProfile, MLTask, ...)
-│   │   ├── db.py              # SQLite
-│   │   ├── agents/            # Supervisor, DataAnalyst, TaskPlanner, FeatureEngineering,
-│   │   │                      # ModelBuilder, Experiment, Critic, Report
-│   │   ├── services/          # runner (фон), storage, llm
-│   │   ├── api/projects.py    # REST + SSE endpoints
-│   │   ├── demo_data.py       # генератор демо-датасета churn
-│   │   └── seed.py            # seed-скрипт
-│   ├── scripts/e2e_demo.py    # end-to-end сценарий
-│   └── requirements*.txt
-└── frontend/
-    ├── app/                   # landing, dashboard, new project, workspace, results, playground
-    ├── components/            # shadcn-стиль UI + feature-компоненты
-    └── lib/                   # API-клиент, типы, live-хуки
+```sh
+npm run lint
+npm run typecheck
+npm run build
+npx playwright install chromium
+npm test
+npm run format
 ```
 
-## Ограничения MVP
+Browser tests require the running Compose stack. Unix task aliases: `make dev`, `make test`, `make lint`, `make format`, `make migrate`, `make seed`. `make reset-db` prints the manual destructive reset command.
 
-- Только табличные CSV; один файл на проект.
-- Одно train/validation-разбиение без кросс-валидации; один шаг улучшения.
-- Модели только из безопасного списка; CatBoost/Optuna — опционально.
+## Demo in 3–5 minutes
+
+1. Open the landing page, choose Try demo; an isolated session and churn project are created.
+2. Inspect profile: rows, types, missing values, imbalance and leakage/ID warnings.
+3. Run pipeline and watch stages/events and experiment scores appear.
+4. Inspect leaderboard, train/validation metrics, confusion matrix, feature importance and accepted/rejected improvement.
+5. Open Results, download model and inference code, then test a customer in Prediction Playground.
+6. Register a second account to verify that previous projects are private; sign out through the header.
+
+## Security and current limitations
+
+Uploaded CSV/model text and LLM output never execute as server code. Only generated model files are loaded after a private-path and integrity check. Ownership checks cover all private routes. Production must use HTTPS, a strong JWT secret, secure cookies, exact CORS origins and private PostgreSQL/Redis.
+
+Local reset links are development-only. Production email recovery returns 503 until a real provider is configured. Cancellation waits for in-flight model fits; Redis workers enforce a hard job timeout, while inline mode cannot forcibly kill threads. Current evaluation uses train/validation rather than an independent test set; threshold tuning can overestimate validation performance. Leakage checks are heuristic. Model importance is global, not a per-prediction explanation. Disposable demo accounts and old artifacts currently require manual cleanup. This is a local/hackathon MVP, not a public multi-tenant deployment with quotas and email delivery.
+
+## Screenshots
+
+Capture placeholders: landing, dashboard, workspace timeline, results/leaderboard, mobile layout. Screenshots should come from real runs rather than fabricated metrics.
+

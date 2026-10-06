@@ -1,9 +1,10 @@
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
+from .settings import get_settings
 
 TaskType = Literal["binary_classification", "multiclass_classification", "regression"]
-ProjectStatus = Literal["created", "running", "completed", "failed"]
+ProjectStatus = Literal["created", "queued", "running", "completed", "failed", "cancelled"]
 Level = Literal["info", "warning", "critical"]
 
 
@@ -29,6 +30,7 @@ class LeakageCandidate(BaseModel):
 
 
 class DatasetProfile(BaseModel):
+    quality_score: Optional[float] = None
     n_rows: int
     n_columns: int
     columns: list[ColumnProfile]
@@ -68,6 +70,7 @@ class FeatureImportance(BaseModel):
 class ConfusionMatrix(BaseModel):
     labels: list[str]
     matrix: list[list[int]]
+    support: list[int] = Field(default_factory=list)
 
 
 class Experiment(BaseModel):
@@ -89,6 +92,12 @@ class Experiment(BaseModel):
 
 
 class AgentEvent(BaseModel):
+    event_id: Optional[str] = None
+    run_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    type: str = "agent_message"
+    created_at: Optional[str] = None
+    progress: float = 0
     id: int
     project_id: str
     ts: str
@@ -168,6 +177,7 @@ class StageInfo(BaseModel):
     status: Literal["pending", "running", "completed", "failed", "skipped"]
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
 
 
 class RunStatus(BaseModel):
@@ -180,8 +190,8 @@ class RunStatus(BaseModel):
 
 
 class CreateProjectRequest(BaseModel):
-    name: str
-    description: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=4000)
     use_demo_dataset: bool = False
     target_column: Optional[str] = None
     primary_metric: Optional[str] = None
@@ -191,12 +201,14 @@ class RunRequest(BaseModel):
     target_column: Optional[str] = None
     primary_metric: Optional[str] = None
     business_priority: Optional[str] = None
-    time_budget_seconds: int = 180
-    max_experiments: int = 4
+    time_budget_seconds: int = Field(
+        default_factory=lambda: get_settings().default_time_budget_seconds, ge=30, le=600
+    )
+    max_experiments: int = Field(default=4, ge=1, le=6)
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
 
 
 class ChatResponse(BaseModel):

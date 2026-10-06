@@ -1,5 +1,5 @@
 "use client";
-
+import { useI18n } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import { ScrollText } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
@@ -14,6 +14,7 @@ const levelDot: Record<EventLevel, string> = {
 };
 
 export function LogsTab({ events }: { events: AgentEvent[] }) {
+  const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,8 +26,10 @@ export function LogsTab({ events }: { events: AgentEvent[] }) {
     return (
       <EmptyState
         icon={ScrollText}
-        title="No log entries yet"
-        description="Agent events will stream here in real time once a run is in progress."
+        title={t("No log entries yet")}
+        description={t(
+          "Agent events will stream here in real time once a run is in progress.",
+        )}
       />
     );
   }
@@ -34,15 +37,29 @@ export function LogsTab({ events }: { events: AgentEvent[] }) {
   return (
     <div
       ref={scrollRef}
-      className="max-h-[520px] space-y-1 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-xs"
+      className="max-h-[520px] space-y-1 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs"
     >
       {events.map((event) => (
-        <div key={event.id} className="flex items-start gap-3 rounded-md px-2 py-1 hover:bg-white/[0.03]">
-          <span className="shrink-0 tabular-nums text-zinc-600">{formatTime(event.ts)}</span>
-          <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", levelDot[event.level])} />
-          <span className="w-24 shrink-0 truncate text-zinc-500">{event.agent}</span>
-          <span className="w-28 shrink-0 truncate text-zinc-600">{event.stage}</span>
-          <span className="text-zinc-300">{event.message}</span>
+        <div
+          key={event.id}
+          className="flex items-start gap-3 rounded-md px-2 py-1 hover:bg-zinc-100"
+        >
+          <span className="shrink-0 tabular-nums text-zinc-500">
+            {formatTime(event.ts)}
+          </span>
+          <span
+            className={cn(
+              "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+              levelDot[event.level],
+            )}
+          />
+          <span className="w-24 shrink-0 truncate text-zinc-500">
+            {t(event.agent)}
+          </span>
+          <span className="w-28 shrink-0 truncate text-zinc-500">
+            {t(event.stage)}
+          </span>
+          <span className="text-zinc-700">{t(event.message)}</span>
         </div>
       ))}
     </div>

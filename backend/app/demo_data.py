@@ -1,4 +1,5 @@
 """Deterministic synthetic telecom churn dataset used for the built-in demo."""
+
 from pathlib import Path
 
 import numpy as np
@@ -17,9 +18,7 @@ def generate_demo_dataframe() -> pd.DataFrame:
     monthly_charges = np.round(rng.uniform(20, 120, n), 2)
     total_charges = np.round(tenure_months * monthly_charges * rng.uniform(0.92, 1.08, n), 2)
     contract_type = rng.choice(["Month-to-month", "One year", "Two year"], n, p=[0.55, 0.25, 0.20])
-    payment_method = rng.choice(
-        ["Electronic check", "Mailed check", "Bank transfer", "Credit card"], n
-    )
+    payment_method = rng.choice(["Electronic check", "Mailed check", "Bank transfer", "Credit card"], n)
     num_support_calls = np.clip(rng.poisson(1.2, n), 0, 8)
     is_premium = rng.choice(["Yes", "No"], n, p=[0.3, 0.7])
     avg_monthly_gb = np.round(np.clip(rng.normal(45, 20, n), 1, None), 1)

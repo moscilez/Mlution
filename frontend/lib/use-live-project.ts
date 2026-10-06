@@ -21,7 +21,14 @@ export function useLiveProject(projectId: string, enabled = true): LiveProject {
   useEffect(() => {
     if (!enabled) return;
     let closed = false;
-    const source = new EventSource(eventsStreamUrl(projectId));
+    const source = new EventSource(eventsStreamUrl(projectId), {
+      withCredentials: true,
+    });
+    source.onopen = () => setFallback(false);
+    source.addEventListener("close", () => {
+      closed = true;
+      source.close();
+    });
 
     source.onmessage = (msg: MessageEvent<string>) => {
       try {
@@ -43,7 +50,7 @@ export function useLiveProject(projectId: string, enabled = true): LiveProject {
     source.onerror = () => {
       if (closed) return;
       setFallback(true);
-      source.close();
+      // EventSource reconnects with Last-Event-ID; polling covers the outage.
     };
 
     return () => {
@@ -52,5 +59,5 @@ export function useLiveProject(projectId: string, enabled = true): LiveProject {
     };
   }, [projectId, enabled, queryClient]);
 
-  return { fallback, refetchInterval: fallback ? 2500 : false };
+  return { fallback, refetchInterval: enabled ? 2500 : false };
 }

@@ -9,7 +9,8 @@ import type {
   RunStatus,
 } from "./types";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function toError(res: Response): Promise<Error> {
   let detail = `${res.status} ${res.statusText}`;
@@ -25,17 +26,100 @@ async function toError(res: Response): Promise<Error> {
   return new Error(detail);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export function csrfToken(): string {
+  if (typeof document === "undefined") return "";
+  return (
+    document.cookie
+      .split("; ")
+      .find((v) => v.startsWith("mlution_csrf="))
+      ?.split("=")[1] ?? ""
+  );
+}
+
+let refreshing: Promise<Response> | null = null;
+
+export async function request<T>(
+  path: string,
+  init?: RequestInit,
+  retried = false,
+): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: init?.body instanceof FormData ? init.headers : {
-      "Content-Type": "application/json",
+    credentials: "include",
+    headers: {
+      ...(init?.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
+      "X-CSRF-Token": csrfToken(),
       ...init?.headers,
     },
   });
-  if (!res.ok) throw await toError(res);
+  if (
+    res.status === 401 &&
+    !retried &&
+    !path.match(/\/auth\/(login|register|refresh|demo)/)
+  ) {
+    refreshing ??= fetch(`${API_BASE}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-CSRF-Token": csrfToken() },
+    }).finally(() => {
+      refreshing = null;
+    });
+    const refresh = await refreshing;
+    if (refresh.ok) return request<T>(path, init, true);
+  }
+  if (!res.ok) {
+    const error = await toError(res);
+    if (init?.method && init.method !== "GET" && typeof window !== "undefined")
+      window.dispatchEvent(
+        new CustomEvent("mlution:toast", {
+          detail: { message: error.message, error: true },
+        }),
+      );
+    throw error;
+  }
+  if (init?.method && init.method !== "GET" && typeof window !== "undefined") {
+    const messages: Record<string, string> = {
+      projects: "Project saved",
+      run: "Run queued",
+      predict: "Prediction ready",
+      dataset: "Dataset updated",
+      cancel: "Cancellation requested",
+      "change-password": "Password changed",
+      logout: "Signed out",
+    };
+    const message = messages[path.split("/").pop() ?? ""];
+    if (message)
+      window.dispatchEvent(
+        new CustomEvent("mlution:toast", { detail: { message } }),
+      );
+  }
   return (await res.json()) as T;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  role: "user" | "admin";
+}
+export const getMe = () => request<User>("/api/auth/me");
+export const signOut = () => request("/api/auth/logout", { method: "POST" });
+export const authenticate = (
+  mode: "login" | "register",
+  email: string,
+  password: string,
+) =>
+  request<User>(`/api/auth/${mode}`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+export const demoLogin = () =>
+  request<User>("/api/auth/demo", { method: "POST" });
+export const getRuns = (id: string) =>
+  request<{ id: string; status: string }[]>(`/api/projects/${id}/runs`);
+export const cancelRun = (id: string, runId: string) =>
+  request(`/api/projects/${id}/runs/${runId}/cancel`, { method: "POST" });
 
 export function getHealth(): Promise<{ status: string }> {
   return request("/api/health");
@@ -86,7 +170,7 @@ export interface RunProjectInput {
 
 export function runProject(
   id: string,
-  input: RunProjectInput
+  input: RunProjectInput,
 ): Promise<{ status: string; project_id: string }> {
   return request(`/api/projects/${id}/run`, {
     method: "POST",
@@ -116,7 +200,7 @@ export function getReport(id: string): Promise<FinalReport> {
 
 export function predict(
   id: string,
-  features: Record<string, unknown>
+  features: Record<string, unknown>,
 ): Promise<PredictionResponse> {
   return request(`/api/projects/${id}/predict`, {
     method: "POST",

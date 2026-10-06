@@ -1,14 +1,24 @@
 import re
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from ..schemas import DatasetProfile
 from .base import AgentContext
 
 ID_PATTERN = re.compile(r"(^|_)(id|uuid|guid|index|row_id)(_|$)", re.IGNORECASE)
-TARGET_NAME_HINTS = ["target", "label", "y", "outcome", "churn", "default", "fraud", "survived", "price", "clicked"]
+TARGET_NAME_HINTS = [
+    "target",
+    "label",
+    "y",
+    "outcome",
+    "churn",
+    "default",
+    "fraud",
+    "survived",
+    "price",
+    "clicked",
+]
 LEAKAGE_KEYWORDS = ["reason", "label", "outcome", "result", "answer", "after", "post_", "leak"]
 
 
@@ -51,7 +61,7 @@ def _task_hint(df: pd.DataFrame, target: Optional[str]) -> Optional[str]:
     return "regression" if pd.api.types.is_numeric_dtype(s) else None
 
 
-def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
+def profile_dataframe(df: pd.DataFrame, target_override: Optional[str] = None) -> DatasetProfile:
     n_rows, n_columns = df.shape
     n_duplicates = int(df.duplicated().sum())
 
@@ -62,9 +72,11 @@ def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
         kind = _column_kind(s, n_rows)
         kinds[str(col)] = kind
         non_null = s.dropna()
-        examples = [str(v) for v in non_null.unique()[:10]] if kind == "categorical" else [
-            str(round(float(v), 4)) if isinstance(v, float) else str(v) for v in non_null.head(5)
-        ]
+        examples = (
+            [str(v) for v in non_null.unique()[:10]]
+            if kind == "categorical"
+            else [str(round(float(v), 4)) if isinstance(v, float) else str(v) for v in non_null.head(5)]
+        )
         columns.append(
             {
                 "name": str(col),
@@ -81,7 +93,9 @@ def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
     categorical_columns = [c["name"] for c in columns if c["kind"] == "categorical"]
     id_columns = [c["name"] for c in columns if c["kind"] == "id_like"]
 
-    target = _suggest_target(df, kinds)
+    if target_override and target_override not in df.columns:
+        raise ValueError("Selected target is not present in the dataset")
+    target = target_override or _suggest_target(df, kinds)
     task_hint = _task_hint(df, target)
 
     leakage_candidates: list[dict] = []
@@ -91,10 +105,14 @@ def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
             continue
         low = name.lower()
         if target and target.lower() in low:
-            leakage_candidates.append({"column": name, "reason": f"Column name contains the target name '{target}'"})
+            leakage_candidates.append(
+                {"column": name, "reason": f"Column name contains the target name '{target}'"}
+            )
             continue
         if any(k in low for k in LEAKAGE_KEYWORDS):
-            leakage_candidates.append({"column": name, "reason": "Column name suggests post-outcome information"})
+            leakage_candidates.append(
+                {"column": name, "reason": "Column name suggests post-outcome information"}
+            )
             continue
         if target and pd.api.types.is_numeric_dtype(df[col]) and pd.api.types.is_numeric_dtype(df[target]):
             pair = df[[col, target]].dropna()
@@ -152,7 +170,11 @@ def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
         )
     for col in id_columns:
         warnings.append(
-            {"level": "info", "code": "id_column", "message": f"Column '{col}' looks like an identifier and will be excluded from training."}
+            {
+                "level": "info",
+                "code": "id_column",
+                "message": f"Column '{col}' looks like an identifier and will be excluded from training.",
+            }
         )
     for cand in leakage_candidates:
         warnings.append(
@@ -164,6 +186,15 @@ def profile_dataframe(df: pd.DataFrame) -> DatasetProfile:
         )
 
     return DatasetProfile(
+        quality_score=round(
+            max(
+                0,
+                100 * (1 - float(df.isna().sum().sum()) / max(1, n_rows * n_columns))
+                - 100 * n_duplicates / max(1, n_rows)
+                - min(30, 5 * len(leakage_candidates)),
+            ),
+            1,
+        ),
         n_rows=int(n_rows),
         n_columns=int(n_columns),
         columns=columns,
@@ -191,7 +222,9 @@ class DataAnalystAgent:
         ctx = self.ctx
         ctx.emit(self.name, "analyze", "Loading dataset and computing data profile…")
         df = ctx.load_df()
-        profile = profile_dataframe(df)
+        profile = profile_dataframe(
+            df, ctx.run_config.get("target_column") or ctx.project.get("target_column")
+        )
         db_update = profile.model_dump()
         from .. import db as _db
 
@@ -206,7 +239,13 @@ class DataAnalystAgent:
             {"n_rows": profile.n_rows, "n_columns": profile.n_columns},
         )
         for w in profile.warnings:
-            ctx.emit(self.name, "analyze", w.message, "warning" if w.level != "critical" else "error", w.model_dump())
+            ctx.emit(
+                self.name,
+                "analyze",
+                w.message,
+                "warning" if w.level != "critical" else "error",
+                w.model_dump(),
+            )
         if profile.target_column:
             ctx.emit(
                 self.name,

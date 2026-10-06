@@ -1,0 +1,9 @@
+services:
+  backend:
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+    command: ['sh', '-c', 'python -m app.bootstrap && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload']
+  worker:
+    volumes:
+      - ./backend/app:/app/app

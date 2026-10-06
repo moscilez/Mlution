@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthGate } from "@/components/auth-gate";
+import { ToastViewport } from "@/components/toast-viewport";
+import { LocaleProvider } from "@/lib/i18n";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -14,10 +17,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
             staleTime: 5_000,
           },
         },
-      })
+      }),
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <LocaleProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthGate>{children}</AuthGate>
+        <ToastViewport />
+      </QueryClientProvider>
+    </LocaleProvider>
   );
 }

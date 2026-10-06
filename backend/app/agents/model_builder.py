@@ -12,11 +12,23 @@ except Exception:  # pragma: no cover - optional dependency
 
 def build_model_zoo(task_type: str) -> list[dict[str, Any]]:
     """Return the safe, bounded model zoo. Each entry: name, model_type, factory, hyperparameters."""
-    from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor, RandomForestClassifier, RandomForestRegressor
+    from sklearn.ensemble import (
+        HistGradientBoostingClassifier,
+        HistGradientBoostingRegressor,
+        RandomForestClassifier,
+        RandomForestRegressor,
+    )
     from sklearn.linear_model import LinearRegression, LogisticRegression
+    from sklearn.dummy import DummyClassifier, DummyRegressor
 
     if task_type in ("binary_classification", "multiclass_classification"):
         zoo = [
+            {
+                "name": "Dummy baseline",
+                "model_type": "dummy",
+                "factory": lambda: DummyClassifier(strategy="prior"),
+                "hyperparameters": {"strategy": "prior"},
+            },
             {
                 "name": "Logistic Regression",
                 "model_type": "logistic_regression",
@@ -48,6 +60,12 @@ def build_model_zoo(task_type: str) -> list[dict[str, Any]]:
         return zoo
 
     zoo = [
+        {
+            "name": "Dummy baseline",
+            "model_type": "dummy",
+            "factory": lambda: DummyRegressor(strategy="mean"),
+            "hyperparameters": {"strategy": "mean"},
+        },
         {
             "name": "Linear Regression",
             "model_type": "linear_regression",

@@ -1,222 +1,202 @@
+"""SQLAlchemy repository; dictionaries preserve existing agent contracts."""
+
 import json
-import sqlite3
-import threading
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from contextvars import ContextVar
+from sqlalchemy import create_engine, select, update, delete, text, event
+from sqlalchemy.orm import sessionmaker
+from .settings import get_settings
+from . import models as m
 
-from .config import DB_PATH
+run_context = ContextVar("run_id", default=None)
+engine = create_engine(get_settings().database_url, pool_pre_ping=True, pool_recycle=1800)
+SessionLocal = sessionmaker(engine, expire_on_commit=False)
+if engine.dialect.name == "sqlite":
 
-_write_lock = threading.Lock()
+    @event.listens_for(engine, "connect")
+    def sqlite_foreign_keys(connection, record):
+        connection.execute("PRAGMA foreign_keys=ON")
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    status TEXT DEFAULT 'created',
-    stage TEXT,
-    task_type TEXT,
-    target_column TEXT,
-    primary_metric TEXT,
-    best_experiment_id TEXT,
-    best_metric_value REAL,
-    best_model_type TEXT,
-    dataset_name TEXT,
-    dataset_path TEXT,
-    error TEXT,
-    profile_json TEXT,
-    task_json TEXT,
-    report_json TEXT,
-    business_priority TEXT,
-    run_config_json TEXT,
-    stages_json TEXT,
-    created_at TEXT,
-    updated_at TEXT
-);
-CREATE TABLE IF NOT EXISTS experiments (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    name TEXT,
-    model_type TEXT,
-    status TEXT DEFAULT 'pending',
-    stage TEXT DEFAULT 'baseline',
-    hyperparameters_json TEXT DEFAULT '{}',
-    metrics_json TEXT DEFAULT '[]',
-    primary_metric_name TEXT,
-    primary_metric_value REAL,
-    train_seconds REAL,
-    error TEXT,
-    feature_importance_json TEXT DEFAULT '[]',
-    confusion_matrix_json TEXT,
-    artifact_path TEXT,
-    threshold REAL,
-    created_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_experiments_project ON experiments(project_id);
-CREATE TABLE IF NOT EXISTS agent_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id TEXT NOT NULL,
-    ts TEXT,
-    agent TEXT,
-    stage TEXT,
-    level TEXT DEFAULT 'info',
-    message TEXT,
-    data_json TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_events_project ON agent_events(project_id, id);
-"""
 
 JSON_PROJECT_FIELDS = {"profile_json", "task_json", "report_json", "run_config_json", "stages_json"}
 
 
-def utcnow() -> str:
+def utcnow():
     return datetime.now(timezone.utc).isoformat()
 
 
-def new_id() -> str:
-    return uuid.uuid4().hex[:12]
+def new_id():
+    return str(uuid.uuid4())
 
 
-def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH), timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+def init_db():
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
 
-def init_db() -> None:
-    with connect() as conn:
-        conn.executescript(SCHEMA)
-        conn.commit()
+def view(obj):
+    row = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    return {k: v.isoformat() if isinstance(v, datetime) else v for k, v in row.items()}
 
 
-def _rows(sql: str, params: tuple = ()) -> list[dict]:
-    with connect() as conn:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-
-
-def _run(sql: str, params: tuple = ()) -> int:
-    with _write_lock:
-        with connect() as conn:
-            cur = conn.execute(sql, params)
-            conn.commit()
-            return cur.lastrowid or 0
-
-
-# ---------------- projects ----------------
-
-def create_project(name: str, description: str) -> dict:
-    pid = new_id()
-    now = utcnow()
-    _run(
-        "INSERT INTO projects (id, name, description, status, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-        (pid, name, description, "created", now, now),
-    )
-    return get_project(pid)
-
-
-def get_project(pid: str) -> Optional[dict]:
-    rows = _rows("SELECT * FROM projects WHERE id = ?", (pid,))
-    if not rows:
-        return None
-    row = rows[0]
+def project_view(obj):
+    row = view(obj)
     for f in JSON_PROJECT_FIELDS:
         if row.get(f):
-            try:
-                row[f] = json.loads(row[f])
-            except Exception:
-                pass
+            row[f] = json.loads(row[f])
     return row
 
 
-def list_projects() -> list[dict]:
-    rows = _rows("SELECT * FROM projects ORDER BY created_at DESC")
-    for row in rows:
-        for f in JSON_PROJECT_FIELDS:
-            if row.get(f):
-                try:
-                    row[f] = json.loads(row[f])
-                except Exception:
-                    pass
-    return rows
+def create_project(name, description, owner_id):
+    with SessionLocal.begin() as s:
+        p = m.Project(name=name, description=description, owner_id=owner_id)
+        s.add(p)
+        s.flush()
+        return project_view(p)
 
 
-def update_project(pid: str, **fields: Any) -> None:
-    if not fields:
-        return
-    fields["updated_at"] = utcnow()
-    sets, params = [], []
-    for k, v in fields.items():
-        if k in JSON_PROJECT_FIELDS and not isinstance(v, str) and v is not None:
-            v = json.dumps(v)
-        sets.append(f"{k} = ?")
-        params.append(v)
-    params.append(pid)
-    _run(f"UPDATE projects SET {', '.join(sets)} WHERE id = ?", tuple(params))
+def get_project(pid):
+    with SessionLocal() as s:
+        p = s.get(m.Project, pid)
+        return project_view(p) if p else None
 
 
-# ---------------- experiments ----------------
-
-def create_experiment(pid: str, name: str, model_type: str, stage: str, hyperparameters: dict) -> str:
-    eid = new_id()
-    _run(
-        "INSERT INTO experiments (id, project_id, name, model_type, status, stage, hyperparameters_json, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?)",
-        (eid, pid, name, model_type, "pending", stage, json.dumps(hyperparameters), utcnow()),
-    )
-    return eid
-
-
-def update_experiment(eid: str, **fields: Any) -> None:
-    json_fields = {"hyperparameters": "hyperparameters_json", "metrics": "metrics_json",
-                   "feature_importance": "feature_importance_json", "confusion_matrix": "confusion_matrix_json"}
-    sets, params = [], []
-    for k, v in fields.items():
-        col = json_fields.get(k, k)
-        if k in json_fields and not isinstance(v, str) and v is not None:
-            v = json.dumps(v)
-        sets.append(f"{col} = ?")
-        params.append(v)
-    if not sets:
-        return
-    params.append(eid)
-    _run(f"UPDATE experiments SET {', '.join(sets)} WHERE id = ?", tuple(params))
+def list_projects(owner_id, offset=0, limit=50):
+    with SessionLocal() as s:
+        return [
+            project_view(p)
+            for p in s.scalars(
+                select(m.Project)
+                .where(m.Project.owner_id == owner_id)
+                .order_by(m.Project.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ]
 
 
-def list_experiments(pid: str) -> list[dict]:
-    rows = _rows("SELECT * FROM experiments WHERE project_id = ? ORDER BY created_at ASC", (pid,))
+def update_project(pid, **fields):
+    if set(fields) - set(m.Project.__table__.columns.keys()):
+        raise ValueError("Unknown project field")
+    for k in JSON_PROJECT_FIELDS & fields.keys():
+        if fields[k] is not None and not isinstance(fields[k], str):
+            fields[k] = json.dumps(fields[k], allow_nan=False)
+    with SessionLocal.begin() as s:
+        s.execute(update(m.Project).where(m.Project.id == pid).values(**fields))
+        if fields.get("dataset_path") and fields.get("profile_json"):
+            dataset = m.Dataset(
+                project_id=pid, name=fields.get("dataset_name", "dataset.csv"), path=fields["dataset_path"]
+            )
+            s.add(dataset)
+            s.flush()
+            s.add(m.DatasetProfile(dataset_id=dataset.id, profile_json=fields["profile_json"]))
+
+
+def create_experiment(pid, name, model_type, stage, hyperparameters):
+    with SessionLocal.begin() as s:
+        e = m.Experiment(
+            project_id=pid,
+            run_id=run_context.get(),
+            name=name,
+            model_type=model_type,
+            stage=stage,
+            hyperparameters_json=json.dumps(hyperparameters),
+        )
+        s.add(e)
+        s.flush()
+        return e.id
+
+
+def update_experiment(eid, **fields):
+    mapping = {
+        "hyperparameters": "hyperparameters_json",
+        "metrics": "metrics_json",
+        "feature_importance": "feature_importance_json",
+        "confusion_matrix": "confusion_matrix_json",
+    }
+    values = {
+        mapping.get(k, k): json.dumps(v, allow_nan=False) if k in mapping and v is not None else v
+        for k, v in fields.items()
+    }
+    if set(values) - set(m.Experiment.__table__.columns.keys()):
+        raise ValueError("Unknown experiment field")
+    with SessionLocal.begin() as s:
+        s.execute(update(m.Experiment).where(m.Experiment.id == eid).values(**values))
+        if values.get("artifact_path") and values.get("artifact_sha256"):
+            s.add(
+                m.ModelArtifact(
+                    experiment_id=eid, path=values["artifact_path"], sha256=values["artifact_sha256"]
+                )
+            )
+
+
+def list_experiments(pid, run_id=None):
+    current = run_id or run_context.get()
+    stmt = select(m.Experiment).where(m.Experiment.project_id == pid)
+    if current:
+        stmt = stmt.where(m.Experiment.run_id == current)
+    with SessionLocal() as s:
+        rows = [view(e) for e in s.scalars(stmt.order_by(m.Experiment.created_at))]
     for r in rows:
-        for src, dst in [("hyperparameters_json", "hyperparameters"), ("metrics_json", "metrics"),
-                         ("feature_importance_json", "feature_importance"), ("confusion_matrix_json", "confusion_matrix")]:
-            raw = r.pop(src, None)
-            try:
-                r[dst] = json.loads(raw) if raw else ([] if dst != "confusion_matrix" and dst != "hyperparameters" else ({} if dst == "hyperparameters" else None))
-            except Exception:
-                r[dst] = [] if dst in ("metrics", "feature_importance") else None
-        if r.get("hyperparameters") is None:
-            r["hyperparameters"] = {}
+        for src, dst, default in [
+            ("hyperparameters_json", "hyperparameters", {}),
+            ("metrics_json", "metrics", []),
+            ("feature_importance_json", "feature_importance", []),
+            ("confusion_matrix_json", "confusion_matrix", None),
+        ]:
+            raw = r.pop(src)
+            r[dst] = json.loads(raw) if raw else default
     return rows
 
 
-# ---------------- agent events ----------------
+def add_event(pid, agent, stage, level, message, data=None, event_type="agent_message"):
+    rid = run_context.get()
+    with SessionLocal.begin() as s:
+        e = m.AgentEvent(
+            project_id=pid,
+            run_id=rid,
+            agent=agent,
+            stage=stage,
+            level=level,
+            message=message[:4000],
+            type=event_type,
+            data_json=json.dumps(data) if data is not None else None,
+        )
+        s.add(e)
+        if rid and isinstance(data, dict) and "hypothesis" in data and "decision" in data:
+            s.add(m.ImprovementStep(run_id=rid, details_json=json.dumps(data)))
+        s.flush()
+        return e.id
 
-def add_event(pid: str, agent: str, stage: str, level: str, message: str, data: Any = None) -> int:
-    return _run(
-        "INSERT INTO agent_events (project_id, ts, agent, stage, level, message, data_json) VALUES (?,?,?,?,?,?,?)",
-        (pid, utcnow(), agent, stage, level, message, json.dumps(data) if data is not None else None),
-    )
 
-
-def list_events(pid: str, after_id: int = 0, limit: int = 500) -> list[dict]:
-    rows = _rows(
-        "SELECT * FROM agent_events WHERE project_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
-        (pid, after_id, limit),
-    )
+def list_events(pid, after_id=0, limit=500, run_id=None):
+    stmt = select(m.AgentEvent).where(m.AgentEvent.project_id == pid, m.AgentEvent.id > after_id)
+    if run_id:
+        stmt = stmt.where(m.AgentEvent.run_id == run_id)
+    with SessionLocal() as s:
+        rows = [view(e) for e in s.scalars(stmt.order_by(m.AgentEvent.id).limit(limit))]
     for r in rows:
-        raw = r.pop("data_json", None)
-        try:
-            r["data"] = json.loads(raw) if raw else None
-        except Exception:
-            r["data"] = None
+        r["data"] = json.loads(r.pop("data_json") or "null")
+        from .config import STAGES
+
+        progress = (STAGES.index(r["stage"]) / len(STAGES)) if r["stage"] in STAGES else 0
+        if r["type"] == "run_completed":
+            progress = 1
+        r.update(
+            event_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"mlution:{pid}:{r['id']}")),
+            correlation_id=r["run_id"],
+            created_at=r["ts"],
+            progress=round(progress, 3),
+        )
     return rows
+
+
+def audit(user_id, action, resource_id=None):
+    with SessionLocal.begin() as s:
+        s.add(m.AuditLog(user_id=user_id, action=action, resource_id=resource_id))
+
+
+def delete_project(pid):
+    with SessionLocal.begin() as s:
+        s.execute(delete(m.Project).where(m.Project.id == pid))

@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pandas as pd
 
 from ..schemas import MLTask
@@ -67,7 +65,11 @@ class TaskPlannerAgent:
             f"Target '{target}' has {int(df[target].nunique(dropna=True))} unique values "
             f"({'numeric' if pd.api.types.is_numeric_dtype(df[target]) else 'categorical'}) → {task_type}. "
             f"Primary metric '{primary}'"
-            + (f" chosen from business priority '{business_priority}'." if business_priority and primary in business_priority.lower() else ".")
+            + (
+                f" chosen from business priority '{business_priority}'."
+                if business_priority and primary in business_priority.lower()
+                else "."
+            )
         )
 
         task = MLTask(
@@ -87,6 +89,11 @@ class TaskPlannerAgent:
             target_column=target,
             primary_metric=primary,
         )
-        ctx.emit(self.name, "plan", f"Task plan: {task_type} on '{target}', primary metric: {primary}.", "success",
-                 task.model_dump())
+        ctx.emit(
+            self.name,
+            "plan",
+            f"Task plan: {task_type} on '{target}', primary metric: {primary}.",
+            "success",
+            task.model_dump(),
+        )
         return task.model_dump()

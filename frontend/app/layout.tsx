@@ -1,25 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-
 export const metadata: Metadata = {
-  title: "Mlution — From idea to ML solution",
+  title: "Mlution — От данных к решению",
   description:
-    "Mlution turns a task description and a CSV file into a trained, explained and exportable machine learning solution — automatically.",
-  icons: { icon: "/mlution.svg" },
+    "Mlution анализирует данные, обучает и сравнивает модели машинного обучения. От CSV до модели, понятного отчёта и предсказаний.",
+  icons: { icon: "/mlution-mark.png" },
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${inter.variable} min-h-screen bg-background font-sans text-zinc-100 antialiased`}
-      >
+    <html lang="ru">
+      <body className="min-h-screen bg-background font-sans text-zinc-900 antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

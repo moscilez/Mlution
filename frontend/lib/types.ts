@@ -1,9 +1,8 @@
-export type ProjectStatus = "created" | "running" | "completed" | "failed";
+export type ProjectStatus =
+  "created" | "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export type TaskType =
-  | "binary_classification"
-  | "multiclass_classification"
-  | "regression";
+  "binary_classification" | "multiclass_classification" | "regression";
 
 export interface Project {
   id: string;
@@ -45,6 +44,7 @@ export interface LeakageCandidate {
 }
 
 export interface DatasetProfile {
+  quality_score?: number | null;
   n_rows: number;
   n_columns: number;
   columns: ColumnProfile[];
@@ -163,11 +163,7 @@ export interface FinalReport {
 }
 
 export type StageStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "skipped";
+  "pending" | "running" | "completed" | "failed" | "skipped";
 
 export interface StageInfo {
   name: string;

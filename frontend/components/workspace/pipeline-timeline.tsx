@@ -1,106 +1,160 @@
+"use client";
+import { useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Check, Loader2, X, Circle, SkipForward } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { STAGE_LABELS, STAGE_ORDER, type RunStatus, type StageStatus } from "@/lib/types";
+import {
+  STAGE_LABELS,
+  STAGE_ORDER,
+  type RunStatus,
+  type StageStatus,
+} from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
 
-function StageIcon({ status }: { status: StageStatus }) {
-  switch (status) {
-    case "completed":
-      return <Check className="h-3.5 w-3.5" />;
-    case "running":
-      return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
-    case "failed":
-      return <X className="h-3.5 w-3.5" />;
-    case "skipped":
-      return <SkipForward className="h-3.5 w-3.5" />;
-    default:
-      return <Circle className="h-3.5 w-3.5" />;
-  }
-}
-
-const nodeStyles: Record<StageStatus, string> = {
-  completed: "border-emerald-400/40 bg-emerald-400/15 text-emerald-300",
-  running: "border-cyan-400/50 bg-cyan-400/15 text-cyan-300 animate-pulse-glow",
-  failed: "border-red-400/40 bg-red-400/15 text-red-300",
-  skipped: "border-white/10 bg-white/5 text-zinc-500",
-  pending: "border-white/10 bg-white/5 text-zinc-600",
+const descriptions = {
+  ru: [
+    "Проверяем структуру данных, пропуски, дубликаты и возможную утечку целевой информации.",
+    "Определяем тип задачи и выбираем метрики под вашу цель.",
+    "Обучаем базовую модель и кандидатов для сравнения.",
+    "Сравниваем качество на обучении и валидации, изучаем ошибки.",
+    "Проверяем риски, дисбаланс классов и признаки переобучения.",
+    "Проверяем гипотезы и сохраняем изменения, которые улучшают метрику.",
+    "Собираем лучшую модель, отчёт и Python-код для предсказаний.",
+  ],
+  en: [
+    "Check data structure, missing values, duplicates and potential target leakage.",
+    "Identify the task type and choose metrics for your objective.",
+    "Train a baseline and candidate models for comparison.",
+    "Compare training and validation quality and explore errors.",
+    "Review risks, class imbalance and signs of overfitting.",
+    "Test hypotheses and retain changes that improve the metric.",
+    "Package the best model, report and Python prediction code.",
+  ],
+};
+const labels: Record<StageStatus, string> = {
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  skipped: "Skipped",
+};
+const styles: Record<StageStatus, string> = {
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  running: "border-blue-300 bg-blue-50 text-blue-700 animate-pulse-glow",
+  failed: "border-red-200 bg-red-50 text-red-700",
+  skipped: "border-zinc-200 bg-zinc-50 text-zinc-500",
+  pending: "border-zinc-200 bg-white text-zinc-500",
 };
 
-export function PipelineTimeline({ status }: { status: RunStatus | undefined }) {
-  const stages = STAGE_ORDER.map((name) => {
-    const found = status?.stages.find((s) => s.name === name);
-    return { name, status: found?.status ?? ("pending" as StageStatus) };
-  });
-  const progress = status?.progress ?? 0;
-
+function StageIcon({ status }: { status: StageStatus }) {
+  const Icon =
+    status === "completed"
+      ? Check
+      : status === "running"
+        ? Loader2
+        : status === "failed"
+          ? X
+          : status === "skipped"
+            ? SkipForward
+            : Circle;
   return (
-    <div className="space-y-4">
+    <Icon
+      size={14}
+      className={status === "running" ? "animate-spin" : ""}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function PipelineTimeline({
+  status,
+}: {
+  status: RunStatus | undefined;
+}) {
+  const { t, locale } = useI18n();
+  const [selected, setSelected] = useState<string | null>(null);
+  const stages = STAGE_ORDER.map((name) => ({
+    name,
+    status:
+      status?.stages.find((s) => s.name === name)?.status ??
+      ("pending" as StageStatus),
+  }));
+  const current =
+    selected ??
+    (status?.status === "completed"
+      ? "finalize"
+      : (status?.stage ?? "analyze"));
+  const index = Math.max(
+    0,
+    stages.findIndex((stage) => stage.name === current),
+  );
+  const stage = stages[index];
+  // The API uses a fraction in [0, 1]; the progress component expects percent.
+  const progress = Math.min(100, Math.max(0, (status?.progress ?? 0) * 100));
+  return (
+    <div className="space-y-5">
       <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span className="font-medium uppercase tracking-wider">Pipeline</span>
+        <span className="font-medium">{t("Pipeline")}</span>
         <span className="tabular-nums">{Math.round(progress)}%</span>
       </div>
-      <Progress value={progress} />
-
-      {/* Horizontal (md+) */}
-      <ol className="hidden items-start md:flex">
-        {stages.map((stage, index) => (
-          <li key={stage.name} className="relative flex flex-1 flex-col items-center gap-2">
-            {index > 0 ? (
-              <div
-                className={cn(
-                  "absolute right-1/2 top-4 h-px w-full -translate-y-1/2",
-                  stage.status === "completed" || stage.status === "running"
-                    ? "bg-gradient-to-r from-emerald-400/40 to-current"
-                    : "bg-white/10"
-                )}
-              />
-            ) : null}
-            <div
+      <Progress value={progress} aria-label={t("Pipeline")} />
+      <ol
+        className="grid grid-cols-4 gap-2 md:grid-cols-7"
+        aria-label={t("Pipeline")}
+      >
+        {stages.map((item, i) => (
+          <li key={item.name} className="min-w-0">
+            <button
+              type="button"
+              aria-pressed={stage.name === item.name}
+              aria-label={`${t(STAGE_LABELS[item.name])}: ${t(labels[item.status])}`}
+              onClick={() => setSelected(item.name)}
               className={cn(
-                "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border",
-                nodeStyles[stage.status]
+                "flex w-full flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors hover:border-blue-300",
+                stage.name === item.name
+                  ? "border-blue-200 bg-blue-50/50"
+                  : "border-transparent bg-zinc-50",
               )}
             >
-              <StageIcon status={stage.status} />
-            </div>
-            <span
-              className={cn(
-                "text-[11px] font-medium",
-                stage.status === "pending" ? "text-zinc-600" : "text-zinc-300"
-              )}
-            >
-              {STAGE_LABELS[stage.name] ?? stage.name}
-            </span>
-          </li>
-        ))}
-      </ol>
-
-      {/* Vertical (mobile) */}
-      <ol className="flex flex-col gap-1 md:hidden">
-        {stages.map((stage, index) => (
-          <li key={stage.name} className="flex items-center gap-3">
-            <div className="flex flex-col items-center">
-              <div
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full border",
-                  nodeStyles[stage.status]
-                )}
-              >
-                <StageIcon status={stage.status} />
+              <div className="flex w-full items-center justify-between gap-1">
+                <span
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full border",
+                    styles[item.status],
+                  )}
+                >
+                  <StageIcon status={item.status} />
+                </span>
+                <span className="text-[9px] text-zinc-400">0{i + 1}</span>
               </div>
-              {index < stages.length - 1 ? <div className="h-3 w-px bg-white/10" /> : null}
-            </div>
-            <span
-              className={cn(
-                "text-sm",
-                stage.status === "pending" ? "text-zinc-600" : "text-zinc-200"
-              )}
-            >
-              {STAGE_LABELS[stage.name] ?? stage.name}
-            </span>
+              <span className="text-[10px] font-medium text-zinc-700 sm:text-xs">
+                {t(STAGE_LABELS[item.name])}
+              </span>
+            </button>
           </li>
         ))}
       </ol>
+      <div
+        className="flex flex-col gap-2 border-t border-zinc-100 pt-4 sm:flex-row sm:items-start sm:gap-6"
+        aria-live="polite"
+      >
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-900">
+            {t(STAGE_LABELS[stage.name])}
+          </span>
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[10px]",
+              styles[stage.status],
+            )}
+          >
+            {t(labels[stage.status])}
+          </span>
+        </div>
+        <p className="text-xs leading-relaxed text-zinc-600">
+          {descriptions[locale][index]}
+        </p>
+      </div>
     </div>
   );
 }

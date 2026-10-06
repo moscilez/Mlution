@@ -1,5 +1,5 @@
 "use client";
-
+import { useI18n } from "@/lib/i18n";
 import {
   Bar,
   BarChart,
@@ -27,6 +27,7 @@ export function FeatureImportanceChart({
   limit?: number;
   height?: number;
 }) {
+  const { t } = useI18n();
   const top = [...data]
     .sort((a, b) => b.importance - a.importance)
     .slice(0, limit)
@@ -36,7 +37,7 @@ export function FeatureImportanceChart({
   if (top.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-zinc-500">
-        Feature importance is not available for this model.
+        {t("Feature importance is not available for this model.")}
       </p>
     );
   }
@@ -44,7 +45,11 @@ export function FeatureImportanceChart({
   return (
     <div style={{ height: chartHeight }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={top} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+        <BarChart
+          data={top}
+          layout="vertical"
+          margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+        >
           <XAxis
             type="number"
             tick={AXIS_TICK}
@@ -62,13 +67,17 @@ export function FeatureImportanceChart({
             contentStyle={TOOLTIP_STYLE}
             labelStyle={TOOLTIP_LABEL_STYLE}
             formatter={(value) => [Number(value).toFixed(4), "Importance"]}
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+            cursor={{ fill: "rgba(29,29,31,0.03)" }}
           />
           <Bar dataKey="importance" radius={[0, 6, 6, 0]} maxBarSize={18}>
             {top.map((entry, index) => (
               <Cell
                 key={entry.feature}
-                fill={index === top.length - 1 ? CHART_COLORS.accent : CHART_COLORS.brand}
+                fill={
+                  index === top.length - 1
+                    ? CHART_COLORS.accent
+                    : CHART_COLORS.brand
+                }
               />
             ))}
           </Bar>

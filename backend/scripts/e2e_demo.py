@@ -24,6 +24,11 @@ def check(label: str, condition: bool, detail: str = "") -> None:
 
 def main() -> int:
     client = httpx.Client(base_url=BASE, timeout=30.0)
+    auth = client.post("/api/auth/demo")
+    check("demo session", auth.status_code == 200)
+    if auth.status_code != 200:
+        return 1
+    client.headers["X-CSRF-Token"] = client.cookies.get("mlution_csrf")
 
     r = client.get("/api/health")
     check("health endpoint", r.status_code == 200 and r.json().get("status") == "ok")
@@ -49,7 +54,7 @@ def main() -> int:
 
     # 3. run pipeline
     r = client.post(f"/api/projects/{pid}/run", json={"time_budget_seconds": 180, "max_experiments": 4})
-    check("run started", r.status_code == 200 and r.json()["status"] == "running", r.text[:200])
+    check("run started", r.status_code == 200 and r.json()["status"] in ("queued", "running"), r.text[:200])
 
     deadline = time.time() + 300
     status = {}
@@ -100,7 +105,6 @@ def main() -> int:
 
     # 8. prediction
     sample = {
-        "customer_id": "CUST-999999",
         "tenure_months": 3,
         "monthly_charges": 105.5,
         "total_charges": 310.2,

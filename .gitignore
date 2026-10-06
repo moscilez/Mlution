@@ -15,8 +15,15 @@ backend/data/
 
 # Env
 .env
+frontend/.env.local
 
 # OS / editors
 .DS_Store
 Thumbs.db
 *.log
+.packages/
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
