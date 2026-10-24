@@ -5,6 +5,7 @@ export type TaskType =
   "binary_classification" | "multiclass_classification" | "regression";
 
 export interface Project {
+  mode?: "workspace" | "competition";
   id: string;
   name: string;
   description: string;

@@ -26,6 +26,8 @@ class ApiMiddleware:
         request_id = str(uuid.uuid4())
         started = time.monotonic()
         cap = get_settings().max_upload_size_mb * 1024 * 1024 + 65536 if path.endswith("/dataset") else 65536
+        if path == "/api/competition/projects":
+            cap = get_settings().competition_max_upload_mb * 4 * 1024 * 1024 + 65536
         try:
             declared_size = int(headers.get(b"content-length", b"0"))
         except ValueError:
@@ -48,6 +50,7 @@ class ApiMiddleware:
                 "chat": 30,
                 "run": 10,
                 "retry": 10,
+                "projects": 10,
             }
             if suffix in limits:
                 client = scope.get("client") or ("unknown", 0)

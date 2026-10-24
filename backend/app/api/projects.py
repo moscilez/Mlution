@@ -109,12 +109,20 @@ def get_project(pid: str):
 
 
 def _project_view(p: dict) -> dict:
-    return {k: p.get(k) for k in Project.model_fields}
+    result = {k: p.get(k) for k in Project.model_fields if k != "mode"}
+    result["mode"] = (
+        "competition"
+        if p.get("dataset_path") and Path(p["dataset_path"]).parent.name == "competition"
+        else "workspace"
+    )
+    return result
 
 
 @router.post("/projects/{pid}/dataset", response_model=DatasetProfile)
 async def upload_dataset(pid: str, file: Optional[UploadFile] = File(None), demo: bool = Form(False)):
     p = _get_project_or_404(pid)
+    if _project_view(p)["mode"] == "competition":
+        raise HTTPException(409, "Create a new AutoResearch task to replace competition materials")
     if runner.is_running(pid):
         raise HTTPException(409, "Wait for the active run before replacing the dataset")
     if demo:
@@ -186,6 +194,8 @@ def _profile_csv(path):
 @router.post("/projects/{pid}/run")
 def run_project(pid: str, body: RunRequest):
     p = _get_project_or_404(pid)
+    if _project_view(p)["mode"] == "competition":
+        raise HTTPException(409, "Use the AutoResearch run endpoint for competition tasks")
     if not p.get("dataset_path"):
         raise HTTPException(400, "Attach a dataset first")
     if p.get("status") == "running" or runner.is_running(pid):
@@ -560,7 +570,12 @@ def cancel_run(pid: str, rid: str):
 @router.post("/projects/{pid}/runs/{rid}/retry")
 def retry_run(pid: str, rid: str):
     run = _run_or_404(pid, rid)
-    return run_project(pid, RunRequest(**json.loads(run["config_json"])))
+    config = json.loads(run["config_json"])
+    if config.get("mode") == "competition":
+        from .competition import start_competition, CompetitionRun
+
+        return start_competition(pid, CompetitionRun(**config))
+    return run_project(pid, RunRequest(**config))
 
 
 @router.post("/projects/{pid}/runs/{rid}/stages/{stage}/retry")

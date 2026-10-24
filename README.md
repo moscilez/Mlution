@@ -35,6 +35,17 @@ Request path: browser → FastAPI (session/CSRF/owner validation) → PostgreSQL
 - [Security and production configuration](docs/security.md)
 - [Agent pipeline and cancellation semantics](docs/agent-pipeline.md)
 - [Design, branding, localization and browser verification](docs/design-update.md)
+- [Organizer specification, AutoResearch, portable solution ZIP and startup](docs/competition.md)
+
+## Hackathon AutoResearch
+
+The organizer entry point is `python solution.py task.md`; the standalone agent
+does not need PostgreSQL or Redis. It reads train/test/data dictionary/submission
+template, evaluates hypotheses on a training-only holdout, and atomically saves
+test predictions. Use `python competition/package_solution.py` to create the
+submission ZIP. The web application exposes the same research engine at
+`/competition`. See [the competition guide](docs/competition.md) for Qwen-only
+configuration, offline smoke tests, resource limits and verification boundaries.
 
 Interactive API: http://localhost:8000/docs. Readiness: http://localhost:8000/api/health.
 

@@ -119,6 +119,7 @@ class ImprovementStep(BaseModel):
 
 
 class Project(BaseModel):
+    mode: Literal["workspace", "competition"] = "workspace"
     id: str
     name: str
     description: str = ""

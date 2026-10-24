@@ -11,6 +11,7 @@ import logging
 from . import db
 from .api.projects import router as projects_router
 from .api.auth import router as auth_router
+from .api.competition import router as competition_router
 from .settings import get_settings
 from .middleware import ApiMiddleware
 from .config import DEMO_CSV, ensure_dirs
@@ -42,6 +43,7 @@ app.add_middleware(
 
 app.include_router(projects_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(competition_router, prefix="/api")
 
 
 @app.get("/api/health")

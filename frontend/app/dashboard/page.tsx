@@ -104,7 +104,11 @@ export default function DashboardPage() {
             {projects.map((project) => (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}`}
+                href={
+                  project.mode === "competition"
+                    ? `/competition?project=${project.id}`
+                    : `/projects/${project.id}`
+                }
                 className="group"
               >
                 <Card className="h-full transition-all duration-300 group-hover:-translate-y-1 group-hover:border-brand/40 group-hover:shadow-glow">

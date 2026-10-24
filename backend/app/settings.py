@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     cookie_secure: bool = False
     max_upload_size_mb: int = Field(default=25, ge=1, le=100)
+    competition_max_upload_mb: int = Field(default=100, ge=1, le=100)
     max_rows: int = Field(default=100000, ge=1, le=100000)
     max_columns: int = Field(default=200, ge=2, le=200)
     max_experiments: int = Field(default=6, ge=1, le=6)

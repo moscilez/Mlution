@@ -43,6 +43,12 @@ export function SiteHeader() {
           <Logo />
           <nav className="hidden items-center gap-1 sm:flex">
             <Link
+              href="/competition"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              AutoResearch
+            </Link>
+            <Link
               href="/dashboard"
               className={buttonVariants({ variant: "ghost", size: "sm" })}
             >
@@ -112,6 +118,7 @@ export function SiteHeader() {
             </button>
             {[
               ["Dashboard", "/dashboard"],
+              ["AutoResearch", "/competition"],
               ["New project", "/projects/new"],
               ["Account settings", "/settings"],
             ].map(([label, href]) => (

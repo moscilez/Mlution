@@ -27,3 +27,7 @@ Thumbs.db
 *.tsbuildinfo
 frontend/test-results/
 frontend/playwright-report/
+tmp/
+output/competition/
+.competition-venv/
+competition-task/

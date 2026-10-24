@@ -12,6 +12,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const privatePage =
     path.startsWith("/dashboard") ||
     path.startsWith("/projects") ||
+    path.startsWith("/competition") ||
     path.startsWith("/settings");
   const user = useQuery({
     queryKey: ["me"],

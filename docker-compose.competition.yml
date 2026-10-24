@@ -1,0 +1,17 @@
+services:
+  backend:
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-Qwen3.8-27B}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      COMPETITION_MAX_UPLOAD_MB: ${COMPETITION_MAX_UPLOAD_MB:-100}
+  worker:
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-Qwen3.8-27B}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 32G

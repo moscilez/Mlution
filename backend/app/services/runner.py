@@ -99,7 +99,12 @@ def execute_run(rid):
                 return
             run.status = "running"
             pid, config = run.project_id, json.loads(run.config_json)
-        SupervisorAgent(AgentContext(pid, config, rid)).run()
+        if config.get("mode") == "competition":
+            from ..competition.web import execute
+
+            execute(pid, config, rid)
+        else:
+            SupervisorAgent(AgentContext(pid, config, rid)).run()
         with db.SessionLocal.begin() as s:
             run = s.get(m.AgentRun, rid)
             p = s.get(m.Project, pid)
